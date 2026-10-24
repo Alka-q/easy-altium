@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using EasyAltium.Core.Bridge;
 using EasyAltium.Core.Configuration;
@@ -10,6 +11,10 @@ public partial class SettingsWindow : Window
 {
     private readonly AppConfig _config;
 
+    public bool AllowFullClose { get; set; }
+
+    public event EventHandler? SettingsSaved;
+
     public SettingsWindow(AppConfig config)
     {
         InitializeComponent();
@@ -19,6 +24,12 @@ public partial class SettingsWindow : Window
         if (iconSource is not null)
             Icon = iconSource;
 
+        LoadFromConfig();
+    }
+
+    public void LoadFromConfig()
+    {
+        Topmost = _config.AlwaysOnTopMiniWindow;
         AltiumExeBox.Text = _config.AltiumExecutablePath;
         BridgePrjBox.Text = _config.BridgeScriptProjectPath;
         NpnpExeBox.Text = _config.NpnpExecutablePath;
@@ -33,7 +44,7 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            BrandIconProcessor.EnsureToolbarIconAssets(_config);
+            BrandIconProcessor.EnsureToolbarIconAssets(_config, forceRebuild: true);
             var installer = new AltiumToolbarInstaller(_config);
             ToolbarInstallResult res = installer.InstallToolbarAndMenus();
 
@@ -71,13 +82,24 @@ public partial class SettingsWindow : Window
         _config.EnsureDirectoriesExist();
         _config.Save();
 
-        DialogResult = true;
-        Close();
+        Hide();
+        SettingsSaved?.Invoke(this, EventArgs.Empty);
     }
 
     private void CancelButton_OnClick(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
-        Close();
+        Hide();
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!AllowFullClose)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        base.OnClosing(e);
     }
 }

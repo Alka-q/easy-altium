@@ -16,18 +16,34 @@ namespace EasyAltium.Host.Services;
 /// </summary>
 public static partial class BrandIconProcessor
 {
+    private static ImageSource? s_cachedWindowIcon;
+    private static Bitmap? s_cachedChipBitmap;
+    private static readonly object s_syncLock = new();
+
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyIcon(IntPtr hIcon);
 
-    public static void EnsureToolbarIconAssets(AppConfig config)
+    public static void EnsureToolbarIconAssets(AppConfig config, bool forceRebuild = false)
     {
         ArgumentNullException.ThrowIfNull(config);
 
         var installer = new AltiumToolbarInstaller(config);
+        string svgPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.svg");
+        string bmpPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.bmp");
+
+        if (!forceRebuild &&
+            File.Exists(installer.ToolbarPngIconPath) &&
+            File.Exists(installer.ToolbarHiDpiPngIconPath) &&
+            File.Exists(svgPath) &&
+            File.Exists(bmpPath))
+        {
+            return;
+        }
+
         Directory.CreateDirectory(installer.ToolbarAssetsDirectory);
 
-        using Bitmap transparentChip = LoadAndExtractTransparentChipBitmap(installer.SourceJfifPath);
+        using Bitmap transparentChip = GetOrLoadTransparentChipBitmap(installer.SourceJfifPath);
 
         using Bitmap icon16 = ResizeBitmapHighQuality(transparentChip, 16, 16);
         using Bitmap icon32 = ResizeBitmapHighQuality(transparentChip, 32, 32);
@@ -43,10 +59,8 @@ public static partial class BrandIconProcessor
         string largePngPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium_32.png");
         icon32.Save(largePngPath, ImageFormat.Png);
 
-        string bmpPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.bmp");
         icon16.Save(bmpPath, ImageFormat.Bmp);
 
-        string svgPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.svg");
         File.WriteAllText(svgPath, BuildCleanChipSvg());
     }
 
@@ -67,7 +81,7 @@ public static partial class BrandIconProcessor
         var installer = new AltiumToolbarInstaller(config);
         EnsureToolbarIconAssets(config);
 
-        using Bitmap chipBmp = LoadAndExtractTransparentChipBitmap(installer.SourceJfifPath);
+        using Bitmap chipBmp = GetOrLoadTransparentChipBitmap(installer.SourceJfifPath);
         using Bitmap canvas = new(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(canvas))
         {
@@ -95,27 +109,47 @@ public static partial class BrandIconProcessor
 
     public static ImageSource? LoadWindowIconSource(AppConfig config)
     {
-        try
-        {
-            var installer = new AltiumToolbarInstaller(config);
-            EnsureToolbarIconAssets(config);
+        if (s_cachedWindowIcon is not null)
+            return s_cachedWindowIcon;
 
-            if (!File.Exists(installer.ToolbarPngIconPath))
+        lock (s_syncLock)
+        {
+            if (s_cachedWindowIcon is not null)
+                return s_cachedWindowIcon;
+
+            try
+            {
+                var installer = new AltiumToolbarInstaller(config);
+                if (!File.Exists(installer.ToolbarPngIconPath))
+                    EnsureToolbarIconAssets(config);
+
+                if (!File.Exists(installer.ToolbarPngIconPath))
+                    return null;
+
+                byte[] bytes = File.ReadAllBytes(installer.ToolbarPngIconPath);
+                var bmpImage = new BitmapImage();
+                using var ms = new MemoryStream(bytes);
+                bmpImage.BeginInit();
+                bmpImage.CacheOption = BitmapCacheOption.OnLoad;
+                bmpImage.StreamSource = ms;
+                bmpImage.EndInit();
+                bmpImage.Freeze();
+                s_cachedWindowIcon = bmpImage;
+                return s_cachedWindowIcon;
+            }
+            catch
+            {
                 return null;
-
-            byte[] bytes = File.ReadAllBytes(installer.ToolbarPngIconPath);
-            var bmpImage = new BitmapImage();
-            using var ms = new MemoryStream(bytes);
-            bmpImage.BeginInit();
-            bmpImage.CacheOption = BitmapCacheOption.OnLoad;
-            bmpImage.StreamSource = ms;
-            bmpImage.EndInit();
-            bmpImage.Freeze();
-            return bmpImage;
+            }
         }
-        catch
+    }
+
+    private static Bitmap GetOrLoadTransparentChipBitmap(string sourcePath)
+    {
+        lock (s_syncLock)
         {
-            return null;
+            s_cachedChipBitmap ??= LoadAndExtractTransparentChipBitmap(sourcePath);
+            return (Bitmap)s_cachedChipBitmap.Clone();
         }
     }
 

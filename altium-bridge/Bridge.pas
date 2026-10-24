@@ -794,19 +794,19 @@ var
     WorkspaceDir : String;
     HostExePath  : String;
 begin
-    HostExePath := '';
-    IniPath := ResolveIniFilePath;
+    HostExePath := 'D:\wb\antigravity\easyaltium-q\src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
 
-    if IniPath <> '' then
+    if not FileExists(HostExePath) then
     begin
-        WorkspaceDir := ExpandFileName(ExtractFilePath(IniPath) + '..\');
-        HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
-        if not FileExists(HostExePath) then
-            HostExePath := WorkspaceDir + 'EasyAltium.exe';
+        IniPath := ResolveIniFilePath;
+        if IniPath <> '' then
+        begin
+            WorkspaceDir := ExpandFileName(ExtractFilePath(IniPath) + '..\');
+            HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
+            if not FileExists(HostExePath) then
+                HostExePath := WorkspaceDir + 'EasyAltium.exe';
+        end;
     end;
-
-    if (HostExePath = '') or (not FileExists(HostExePath)) then
-        HostExePath := 'D:\wb\antigravity\easyaltium-q\src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
 
     if FileExists(HostExePath) then
     begin

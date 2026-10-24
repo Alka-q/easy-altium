@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using EasyAltium.Core.Bridge;
 using EasyAltium.Core.Configuration;
 using EasyAltium.Core.Models;
@@ -11,13 +13,23 @@ namespace EasyAltium.Host;
 
 public partial class App : System.Windows.Application
 {
-    private const string SingleInstanceEventName = @"Local\EasyAltium_ShowMiniWindow_Event";
+    public const string SingleInstanceEventName = @"Local\EasyAltium_ShowMiniWindow_Event";
+    private const int SW_RESTORE = 9;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(IntPtr hWnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     private EventWaitHandle? _showWindowEvent;
     private CancellationTokenSource? _ipcListenCts;
     private AppConfig? _config;
     private MainViewModel? _mainViewModel;
     private MiniSearchWindow? _miniWindow;
+    private SettingsWindow? _settingsWindow;
     private PartPreviewPopup? _previewPopup;
     private ClipboardWatcherService? _clipboardWatcher;
     private TrayIconService? _trayIcon;
@@ -39,20 +51,16 @@ public partial class App : System.Windows.Application
 
         _config = AppConfig.LoadOrCreate();
 
-        // doc/EasyAltium-componentimge.jfif simgesinden şeffaf PNG/BMP üret ve Altium Toolbar'a (DXP.RCS) kur
-        try
-        {
-            BrandIconProcessor.EnsureToolbarIconAssets(_config);
-            var toolbarInstaller = new AltiumToolbarInstaller(_config);
-            toolbarInstaller.InstallToolbarAndMenus();
-        }
-        catch
-        {
-        }
-
         _mainViewModel = new MainViewModel(_config);
         _miniWindow = new MiniSearchWindow(_mainViewModel);
         MainWindow = _miniWindow;
+
+        _settingsWindow = new SettingsWindow(_config);
+        _settingsWindow.SettingsSaved += (_, _) =>
+        {
+            _mainViewModel.SyncFromConfig();
+            _mainViewModel.AppendLog("Yapılandırma ayarları kaydedildi.");
+        };
 
         _previewPopup = new PartPreviewPopup();
         _clipboardWatcher = new ClipboardWatcherService
@@ -64,6 +72,8 @@ public partial class App : System.Windows.Application
         _miniWindow.SourceInitialized += (_, _) =>
         {
             _clipboardWatcher.AttachToWindow(_miniWindow);
+            // Ayarlar penceresinin Win32 HWND'sini başlangıçta hazırla (tıklandığında <1ms içinde anında açılsın)
+            _ = new WindowInteropHelper(_settingsWindow).EnsureHandle();
             _mainViewModel.AppendLog("Win32 Pano Dinleyici ve Altium Toolbar ikonu hazır.");
         };
 
@@ -109,6 +119,21 @@ public partial class App : System.Windows.Application
         StartSingleInstanceListener();
         StartDxpRcsSelfHealingMonitor();
         _miniWindow.Show();
+
+        // Arka planda ikon varlıklarını ve DXP.RCS kaydını doğrula (UI açılışını hiç bekletmeden)
+        AppConfig cfg = _config;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                BrandIconProcessor.EnsureToolbarIconAssets(cfg);
+                var toolbarInstaller = new AltiumToolbarInstaller(cfg);
+                toolbarInstaller.EnsureToolbarInstalledIfNeeded();
+            }
+            catch
+            {
+            }
+        });
     }
 
     private void StartSingleInstanceListener()
@@ -211,8 +236,7 @@ public partial class App : System.Windows.Application
         if (_miniWindow.WindowState == WindowState.Minimized)
             _miniWindow.WindowState = WindowState.Normal;
 
-        _miniWindow.Activate();
-        _miniWindow.Focus();
+        BringWindowToFront(_miniWindow);
     }
 
     private void ShowSettingsDialog()
@@ -220,15 +244,35 @@ public partial class App : System.Windows.Application
         if (_config is null || _mainViewModel is null)
             return;
 
-        var dialog = new SettingsWindow(_config);
-        if (_miniWindow is { IsVisible: true })
-            dialog.Owner = _miniWindow;
+        _settingsWindow ??= new SettingsWindow(_config);
+        _settingsWindow.LoadFromConfig();
 
-        if (dialog.ShowDialog() == true)
+        if (_miniWindow is { IsVisible: true } && _miniWindow.WindowState != WindowState.Minimized)
         {
-            _mainViewModel.SyncFromConfig();
-            _mainViewModel.AppendLog("Yapılandırma ayarları kaydedildi.");
+            _settingsWindow.Left = _miniWindow.Left + (_miniWindow.Width - _settingsWindow.Width) / 2;
+            _settingsWindow.Top = _miniWindow.Top + (_miniWindow.Height - _settingsWindow.Height) / 2;
         }
+
+        if (!_settingsWindow.IsVisible)
+            _settingsWindow.Show();
+
+        if (_settingsWindow.WindowState == WindowState.Minimized)
+            _settingsWindow.WindowState = WindowState.Normal;
+
+        BringWindowToFront(_settingsWindow);
+    }
+
+    private static void BringWindowToFront(Window window)
+    {
+        IntPtr hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            ShowWindow(hwnd, SW_RESTORE);
+            SetForegroundWindow(hwnd);
+        }
+
+        window.Activate();
+        window.Focus();
     }
 
     private void ShutdownApplication()
@@ -239,6 +283,12 @@ public partial class App : System.Windows.Application
 
         if (_previewPopup is not null)
             _previewPopup.Close();
+
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.AllowFullClose = true;
+            _settingsWindow.Close();
+        }
 
         if (_miniWindow is not null)
         {
