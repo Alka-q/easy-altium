@@ -40,7 +40,7 @@ public partial class MiniSearchWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        // Sistem tepsisinde (System Tray) çalışmaya devam etmek için çarpıya basıldığında gizle
+        // Hide window instead of closing so EasyAltium continues running in the System Tray
         if (!AllowFullClose)
         {
             e.Cancel = true;

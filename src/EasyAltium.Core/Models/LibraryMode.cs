@@ -1,23 +1,23 @@
 namespace EasyAltium.Core.Models;
 
 /// <summary>
-/// Kütüphane çalışma modu (Mod A: SamacSys tarzı ortak kütüphane, Mod B: Profesyonel SQLite .DbLib)
+/// Library management mode (Mode A: SamacSys-style consolidated library, Mode B: Categorized SQLite .DbLib).
 /// </summary>
 public enum LibraryMode
 {
     /// <summary>
-    /// Mod A: Parçaları ortak LCSC_Master.SchLib ve LCSC_Master.PcbLib içine ekler.
+    /// Mode A: Appends components into consolidated LCSC_Master.SchLib and LCSC_Master.PcbLib files.
     /// </summary>
     MasterLib = 0,
 
     /// <summary>
-    /// Mod B: Kategorize edilmiş SQLite veritabanı (lcsc_components.sqlite) ve .DbLib kullanır.
+    /// Mode B: Uses a categorized SQLite database (lcsc_components.sqlite) and an Altium .DbLib file.
     /// </summary>
     SqliteDbLib = 1
 }
 
 /// <summary>
-/// SQLite .DbLib içerisindeki standart bileşen kategorisi tabloları.
+/// Standard component category tables inside the SQLite .DbLib database.
 /// </summary>
 public enum ComponentCategory
 {
@@ -31,38 +31,38 @@ public enum ComponentCategory
 }
 
 /// <summary>
-/// Altium DelphiScript (Bridge.pas) tarafından yürütülecek işlem türü.
+/// Action type executed by the Altium DelphiScript bridge (Bridge.pas).
 /// </summary>
 public enum BridgeAction
 {
     /// <summary>
-    /// Kütüphaneyi yükler ve aktif şematik (.SchDoc) açıksa bileşeni yerleştirir.
+    /// Installs/refreshes libraries and places the component if an active schematic (.SchDoc) is open.
     /// </summary>
     PlaceOrLoad,
 
     /// <summary>
-    /// Sadece kütüphaneyi (.SchLib, .PcbLib, .DbLib) Altium'a ekler/yeniler.
+    /// Only installs/refreshes the library (.SchLib, .PcbLib, .DbLib) in Altium Designer.
     /// </summary>
     LoadOnly,
 
     /// <summary>
-    /// npnp başarısız olduğunda EasyEDA ASCII .SchDoc/.PcbDoc üzerinden MakeLibrary çalıştırır.
+    /// Runs MakeLibrary from EasyEDA ASCII .SchDoc/.PcbDoc when npnp requires fallback.
     /// </summary>
     FallbackMakeLibrary
 }
 
 /// <summary>
-/// Aktif şematik açıkken bileşenin yerleştirilme yöntemi.
+/// Component placement method when an active schematic document is open.
 /// </summary>
 public enum PlacementMethod
 {
     /// <summary>
-    /// Bileşeni tüm BOM parametreleriyle oluşturur ve fare imlecinin ucuna bağlar (Sch:MoveSelection).
+    /// Instantiates the component with all BOM parameters and attaches it to the user cursor (Sch:MoveSelectedObjects).
     /// </summary>
     InteractiveCursor,
 
     /// <summary>
-    /// Bileşeni doğrudan aktif şematik sayfasında belirtilen koordinata (TargetX_Mils, TargetY_Mils) yerleştirir.
+    /// Places the component directly at the target coordinates (TargetX_Mils, TargetY_Mils) on the active sheet.
     /// </summary>
     DirectToSheet
 }

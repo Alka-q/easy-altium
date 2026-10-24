@@ -11,8 +11,8 @@ using EasyAltium.Core.Configuration;
 namespace EasyAltium.Host.Services;
 
 /// <summary>
-/// doc/EasyAltium-componentimge.jfif dosyasındaki dama tahtası arka planını temizleyerek
-/// şeffaf arka planlı Altium Toolbar PNG/BMP dosyalarını ve uygulama/Tray ikonunu üretir.
+/// Removes the checkerboard background from doc/EasyAltium-componentimge.jfif and generates
+/// pure-white transparent Altium Toolbar PNG/BMP/SVG assets as well as the application/Tray icon.
 /// </summary>
 public static partial class BrandIconProcessor
 {

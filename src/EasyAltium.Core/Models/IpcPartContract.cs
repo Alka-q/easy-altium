@@ -1,8 +1,8 @@
 namespace EasyAltium.Core.Models;
 
 /// <summary>
-/// İstemci uygulama ile Altium DelphiScript (Bridge.pas) arasındaki
-/// current_part.ini veri sözleşmesini temsil eder.
+/// Represents the current_part.ini IPC data contract between the desktop host
+/// and the Altium DelphiScript bridge (Bridge.pas).
 /// </summary>
 public sealed class IpcPartContract
 {

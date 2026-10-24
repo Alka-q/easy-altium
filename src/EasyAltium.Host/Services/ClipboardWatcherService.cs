@@ -5,8 +5,8 @@ using EasyAltium.Core.Models;
 namespace EasyAltium.Host.Services;
 
 /// <summary>
-/// Win32 AddClipboardFormatListener API'sini kullanarak Windows panosunu (Clipboard)
-/// gerçek zamanlı dinleyen ve ^C[1-9]\d{2,}$ formatındaki LCSC parça kodlarını yakalayan servis.
+/// Monitors the Windows clipboard in real time via the Win32 AddClipboardFormatListener API
+/// and detects LCSC part codes matching ^C[1-9]\d{2,}$.
 /// </summary>
 public sealed partial class ClipboardWatcherService : IDisposable
 {
@@ -27,7 +27,7 @@ public sealed partial class ClipboardWatcherService : IDisposable
     private DateTime _lastDetectionTimeUtc = DateTime.MinValue;
 
     /// <summary>
-    /// Panoda geçerli bir LCSC parça kodu (Örn: C2040, C14663) yakalandığında tetiklenir.
+    /// Raised when a valid LCSC part code (e.g., C2040, C14663) is detected on the clipboard.
     /// </summary>
     public event EventHandler<string>? LcscPartCodeDetected;
 
@@ -76,7 +76,7 @@ public sealed partial class ClipboardWatcherService : IDisposable
             string normalized = lcscId.Trim().ToUpperInvariant();
             DateTime now = DateTime.UtcNow;
 
-            // Aynı parça kodu 3 saniye içinde mükerrer tetiklenmesin
+            // Avoid duplicate triggers for the same part code within 3 seconds
             if (string.Equals(normalized, _lastDetectedCode, StringComparison.OrdinalIgnoreCase) &&
                 (now - _lastDetectionTimeUtc).TotalSeconds < 3.0)
             {
@@ -90,7 +90,7 @@ public sealed partial class ClipboardWatcherService : IDisposable
         }
         catch
         {
-            // Başka bir uygulama panoyu kilitlediyse sessizce atla
+            // Silently ignore if another process temporarily holds the clipboard lock
         }
     }
 

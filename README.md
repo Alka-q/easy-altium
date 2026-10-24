@@ -84,5 +84,5 @@ This project is released under the **EasyAltium Open-Source Attribution & Non-Co
 ### Attribution Requirement
 Any use, copy, fork, distribution, or derivative work **must** include visible attribution in your documentation and user interface:
 
-1. **EasyAltium by Osman Ceylan (Alka-q)** — [https://github.com/Alka-q/EasyAltium](https://github.com/Alka-q/EasyAltium)
+1. **EasyAltium by Osman Ceylan (Alka-q)** — [https://github.com/Alka-q/easy-altium](https://github.com/Alka-q/easy-altium)
 2. **npnp by Ref42** (Underlying EasyEDA/LCSC conversion CLI engine) — [https://github.com/ref42/npnp](https://github.com/ref42/npnp) (see [`tools/npnp/LICENSE_npnp.txt`](./tools/npnp/LICENSE_npnp.txt))

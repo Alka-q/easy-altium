@@ -8,8 +8,8 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Altium Toolbar'dan "--show" ile çağrıldığında WPF çatısını hiç yüklemeden
-        // doğrudan mevcut çalışan örneğin penceresini uyandır (< 5 ms).
+        // When invoked with "--show" from the Altium Toolbar, wake up the existing instance
+        // directly without initializing the WPF runtime (< 5 ms).
         if (EventWaitHandle.TryOpenExisting(App.SingleInstanceEventName, out EventWaitHandle? existingEvent))
         {
             existingEvent.Set();
