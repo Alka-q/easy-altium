@@ -1,7 +1,7 @@
 <Window x:Class="EasyAltium.Host.Views.MiniSearchWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EasyAltium — LCSC &amp; JLCPCB Loader (AD 26.10.1)"
+        Title="EasyAltium — LCSC &amp; JLCPCB Loader"
         Width="440"
         Height="530"
         MinWidth="410"
@@ -34,16 +34,24 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Vertical">
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Image x:Name="HeaderBrandIcon"
+                           Width="18"
+                           Height="18"
+                           Margin="0,0,7,0"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                     <TextBlock Text="EASYALTIUM"
                                FontWeight="Bold"
                                FontSize="15"
                                Foreground="#F59E0B"
-                                Margin="0,0,8,0" />
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
                     <Border Background="#262B36"
                             CornerRadius="4"
-                            Padding="6,2">
-                        <TextBlock Text="AD 26.10.1"
+                            Padding="6,2"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding AltiumVersionBadgeText}"
                                    FontSize="10.5"
                                    FontWeight="SemiBold"
                                    Foreground="#9CA3AF" />

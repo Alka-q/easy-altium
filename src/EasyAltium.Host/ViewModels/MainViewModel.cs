@@ -54,6 +54,8 @@ public sealed class MainViewModel : ObservableObject
 
     public AppConfig Config => _config;
 
+    public string AltiumVersionBadgeText => _config.DetectedAltiumVersionLabel;
+
     public ObservableCollection<string> ActivityLogs { get; }
 
     public AsyncRelayCommand FetchPartCommand { get; }
@@ -294,6 +296,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSqliteMode));
         OnPropertyChanged(nameof(UsePassiveTemplateSymbol));
         OnPropertyChanged(nameof(LibraryModeBadgeText));
+        OnPropertyChanged(nameof(AltiumVersionBadgeText));
     }
 
     public void AppendLog(string message)

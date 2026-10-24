@@ -128,6 +128,27 @@ public sealed class AppConfig
     [JsonIgnore]
     public string DbLibFilePath => Path.Combine(DbLibDirectory, "EasyAltium_LCSC.DbLib");
 
+    /// <summary>
+    /// Algılanan veya seçilen Altium Designer sürüm etiketi (Örn: "AD26", "AD27" veya "Altium Designer").
+    /// </summary>
+    [JsonIgnore]
+    public string DetectedAltiumVersionLabel
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(AltiumExecutablePath))
+            {
+                string? parentName = Path.GetFileName(Path.GetDirectoryName(AltiumExecutablePath));
+                if (!string.IsNullOrWhiteSpace(parentName) &&
+                    parentName.StartsWith("AD", StringComparison.OrdinalIgnoreCase))
+                {
+                    return parentName.ToUpperInvariant();
+                }
+            }
+            return "Altium Designer";
+        }
+    }
+
     public AppConfig()
     {
         InitializeDefaultPaths();
@@ -249,24 +270,38 @@ public sealed class AppConfig
 
     private static string? TryDiscoverAltiumExecutable()
     {
-        string[] candidatePaths =
-        [
-            @"C:\Program Files\Altium\AD26\X2.EXE",
-            @"C:\Program Files\Altium\AD25\X2.EXE",
-            @"C:\Program Files\Altium\AD24\X2.EXE"
-        ];
-
-        foreach (string candidate in candidatePaths)
+        // 1. Çalışmakta olan X2.EXE süreci varsa doğrudan onun yolunu al
+        try
         {
-            if (File.Exists(candidate))
-                return candidate;
+            var runningProcs = System.Diagnostics.Process.GetProcessesByName("X2");
+            foreach (var proc in runningProcs)
+            {
+                try
+                {
+                    string? modulePath = proc.MainModule?.FileName;
+                    if (!string.IsNullOrWhiteSpace(modulePath) && File.Exists(modulePath))
+                        return modulePath;
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch
+        {
         }
 
+        // 2. C:\Program Files\Altium altındaki tüm AD* sürümlerini en yeniden eskiye tara
         const string altiumBase = @"C:\Program Files\Altium";
         if (Directory.Exists(altiumBase))
         {
             var adDirs = Directory.GetDirectories(altiumBase, "AD*")
-                .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase);
+                .OrderByDescending(d =>
+                {
+                    string folder = Path.GetFileName(d);
+                    return int.TryParse(folder.AsSpan(2), out int ver) ? ver : 0;
+                })
+                .ThenByDescending(Directory.GetLastWriteTimeUtc);
 
             foreach (string adDir in adDirs)
             {

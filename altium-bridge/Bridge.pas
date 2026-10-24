@@ -782,3 +782,38 @@ begin
         Ini.Free;
     end;
 end;
+
+{==============================================================================}
+{ TOOLBAR GİRİŞ NOKTASI: LaunchOrShowEasyAltium                                }
+{ Altium üst araç çubuğundaki (Toolbar) EasyAltium çip ikonuna tıklandığında   }
+{ masaüstü istemci uygulamasını başlatır veya açık olan pencereyi öne getirir. }
+{==============================================================================}
+procedure LaunchOrShowEasyAltium;
+var
+    IniPath      : String;
+    WorkspaceDir : String;
+    HostExePath  : String;
+begin
+    HostExePath := '';
+    IniPath := ResolveIniFilePath;
+
+    if IniPath <> '' then
+    begin
+        WorkspaceDir := ExpandFileName(ExtractFilePath(IniPath) + '..\');
+        HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
+        if not FileExists(HostExePath) then
+            HostExePath := WorkspaceDir + 'EasyAltium.exe';
+    end;
+
+    if (HostExePath = '') or (not FileExists(HostExePath)) then
+        HostExePath := 'D:\wb\antigravity\easyaltium-q\src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
+
+    if FileExists(HostExePath) then
+    begin
+        RunApplication('"' + HostExePath + '" --show');
+    end
+    else
+    begin
+        ShowMessage('EasyAltium istemci uygulaması bulunamadı: ' + HostExePath);
+    end;
+end;

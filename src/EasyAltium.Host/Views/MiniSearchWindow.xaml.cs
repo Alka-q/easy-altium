@@ -13,6 +13,20 @@ public partial class MiniSearchWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        var iconSource = Services.BrandIconProcessor.LoadWindowIconSource(viewModel.Config);
+        if (iconSource is not null)
+        {
+            Icon = iconSource;
+            HeaderBrandIcon.Source = iconSource;
+        }
+
+        Loaded += (_, _) =>
+        {
+            Activate();
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+        };
     }
 
     private void SearchBox_OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)

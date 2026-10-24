@@ -1,0 +1,174 @@
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using EasyAltium.Core.Bridge;
+using EasyAltium.Core.Configuration;
+
+namespace EasyAltium.Host.Services;
+
+/// <summary>
+/// doc/EasyAltium-componentimge.jfif dosyasındaki dama tahtası arka planını temizleyerek
+/// şeffaf arka planlı Altium Toolbar PNG/BMP dosyalarını ve uygulama/Tray ikonunu üretir.
+/// </summary>
+public static partial class BrandIconProcessor
+{
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyIcon(IntPtr hIcon);
+
+    public static void EnsureToolbarIconAssets(AppConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        var installer = new AltiumToolbarInstaller(config);
+        Directory.CreateDirectory(installer.ToolbarAssetsDirectory);
+
+        using Bitmap transparentChip = LoadAndExtractTransparentChipBitmap(installer.SourceJfifPath);
+
+        using Bitmap icon32 = ResizeBitmapHighQuality(transparentChip, 32, 32);
+        icon32.Save(installer.ToolbarPngIconPath, ImageFormat.Png);
+
+        using Bitmap icon16 = ResizeBitmapHighQuality(transparentChip, 16, 16);
+        icon16.Save(installer.ToolbarSmallPngIconPath, ImageFormat.Png);
+
+        string bmpPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.bmp");
+        icon16.Save(bmpPath, ImageFormat.Bmp);
+    }
+
+    public static Icon CreateApplicationTrayIcon(AppConfig config)
+    {
+        var installer = new AltiumToolbarInstaller(config);
+        EnsureToolbarIconAssets(config);
+
+        using Bitmap chipBmp = LoadAndExtractTransparentChipBitmap(installer.SourceJfifPath);
+        using Bitmap canvas = new(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(canvas))
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.Clear(System.Drawing.Color.Transparent);
+
+            using var bgBrush = new SolidBrush(System.Drawing.Color.FromArgb(230, 24, 27, 34));
+            g.FillEllipse(bgBrush, 1, 1, 30, 30);
+
+            g.DrawImage(chipBmp, new Rectangle(4, 4, 24, 24));
+        }
+
+        IntPtr hIcon = canvas.GetHicon();
+        try
+        {
+            using Icon temp = Icon.FromHandle(hIcon);
+            return (Icon)temp.Clone();
+        }
+        finally
+        {
+            DestroyIcon(hIcon);
+        }
+    }
+
+    public static ImageSource? LoadWindowIconSource(AppConfig config)
+    {
+        try
+        {
+            var installer = new AltiumToolbarInstaller(config);
+            EnsureToolbarIconAssets(config);
+
+            if (!File.Exists(installer.ToolbarPngIconPath))
+                return null;
+
+            byte[] bytes = File.ReadAllBytes(installer.ToolbarPngIconPath);
+            var bmpImage = new BitmapImage();
+            using var ms = new MemoryStream(bytes);
+            bmpImage.BeginInit();
+            bmpImage.CacheOption = BitmapCacheOption.OnLoad;
+            bmpImage.StreamSource = ms;
+            bmpImage.EndInit();
+            bmpImage.Freeze();
+            return bmpImage;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Bitmap LoadAndExtractTransparentChipBitmap(string sourcePath)
+    {
+        if (!File.Exists(sourcePath))
+            return CreateFallbackChipBitmap();
+
+        using var raw = new Bitmap(sourcePath);
+        int width = raw.Width;
+        int height = raw.Height;
+        var clean = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+        // Görseldeki dama tahtası arka plan pikselleri 70..135 parlaklık aralığındadır,
+        // beyaz IC çip çizgileri ise 165..255 aralığındadır. Yumuşak kenar (anti-alias) geçişiyle ayıkla:
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                System.Drawing.Color c = raw.GetPixel(x, y);
+                int lum = (c.R + c.G + c.B) / 3;
+
+                if (lum <= 155)
+                {
+                    clean.SetPixel(x, y, System.Drawing.Color.FromArgb(0, 0, 0, 0));
+                }
+                else
+                {
+                    int alpha = Math.Clamp((lum - 155) * 255 / 85, 0, 255);
+                    clean.SetPixel(x, y, System.Drawing.Color.FromArgb(alpha, 255, 255, 255));
+                }
+            }
+        }
+
+        // Kare ikon tuvaline ortala
+        int maxDim = Math.Max(width, height);
+        var squared = new Bitmap(maxDim, maxDim, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(squared))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            int offsetX = (maxDim - width) / 2;
+            int offsetY = (maxDim - height) / 2;
+            g.DrawImage(clean, offsetX, offsetY, width, height);
+        }
+
+        clean.Dispose();
+        return squared;
+    }
+
+    private static Bitmap ResizeBitmapHighQuality(Bitmap source, int width, int height)
+    {
+        var dest = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using Graphics g = Graphics.FromImage(dest);
+        g.Clear(System.Drawing.Color.Transparent);
+        g.SmoothingMode = SmoothingMode.HighQuality;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.DrawImage(source, new Rectangle(1, 1, width - 2, height - 2));
+        return dest;
+    }
+
+    private static Bitmap CreateFallbackChipBitmap()
+    {
+        var bmp = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using Graphics g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(System.Drawing.Color.Transparent);
+        using var pen = new System.Drawing.Pen(System.Drawing.Color.White, 2.2f);
+        g.DrawRectangle(pen, 9, 5, 14, 22);
+        for (int i = 0; i < 4; i++)
+        {
+            int y = 8 + i * 5;
+            g.DrawLine(pen, 3, y, 9, y);
+            g.DrawLine(pen, 23, y, 29, y);
+        }
+        g.FillEllipse(System.Drawing.Brushes.White, 12, 8, 3, 3);
+        return bmp;
+    }
+}

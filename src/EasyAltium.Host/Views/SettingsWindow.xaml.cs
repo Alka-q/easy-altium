@@ -1,6 +1,8 @@
 using System.Windows;
+using EasyAltium.Core.Bridge;
 using EasyAltium.Core.Configuration;
 using EasyAltium.Core.Models;
+using EasyAltium.Host.Services;
 
 namespace EasyAltium.Host.Views;
 
@@ -13,6 +15,10 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _config = config ?? throw new ArgumentNullException(nameof(config));
 
+        var iconSource = BrandIconProcessor.LoadWindowIconSource(_config);
+        if (iconSource is not null)
+            Icon = iconSource;
+
         AltiumExeBox.Text = _config.AltiumExecutablePath;
         BridgePrjBox.Text = _config.BridgeScriptProjectPath;
         NpnpExeBox.Text = _config.NpnpExecutablePath;
@@ -21,6 +27,32 @@ public partial class SettingsWindow : Window
         PassiveTemplateBox.Text = _config.PassiveTemplateSchLibPath;
         InteractivePlacementCheck.IsChecked = _config.PlacementMethod == PlacementMethod.InteractiveCursor;
         OpenLibIfNoSchCheck.IsChecked = _config.OpenLibraryIfNoSchDoc;
+    }
+
+    private void InstallToolbarButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            BrandIconProcessor.EnsureToolbarIconAssets(_config);
+            var installer = new AltiumToolbarInstaller(_config);
+            ToolbarInstallResult res = installer.InstallToolbarAndMenus();
+
+            System.Windows.MessageBox.Show(
+                this,
+                res.Message,
+                res.IsSuccess ? "EasyAltium Toolbar Kurulumu" : "Uyarı",
+                MessageBoxButton.OK,
+                res.IsSuccess ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Toolbar kurulumu sırasında hata oluştu: {ex.Message}",
+                "Hata",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void SaveButton_OnClick(object sender, RoutedEventArgs e)

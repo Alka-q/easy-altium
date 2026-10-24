@@ -1,4 +1,6 @@
+using System.Threading;
 using System.Windows;
+using EasyAltium.Core.Bridge;
 using EasyAltium.Core.Configuration;
 using EasyAltium.Core.Models;
 using EasyAltium.Host.Services;
@@ -9,6 +11,10 @@ namespace EasyAltium.Host;
 
 public partial class App : System.Windows.Application
 {
+    private const string SingleInstanceEventName = @"Local\EasyAltium_ShowMiniWindow_Event";
+
+    private EventWaitHandle? _showWindowEvent;
+    private CancellationTokenSource? _ipcListenCts;
     private AppConfig? _config;
     private MainViewModel? _mainViewModel;
     private MiniSearchWindow? _miniWindow;
@@ -18,24 +24,47 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Tekil örnek (Single-Instance) kontrolü: Altium Toolbar'dan "--show" ile çağrıldığında
+        // mevcut çalışan örneğin penceresini öne getirir ve ikinci süreci kapatır.
+        bool createdNew;
+        _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SingleInstanceEventName, out createdNew);
+        if (!createdNew)
+        {
+            _showWindowEvent.Set();
+            Shutdown();
+            return;
+        }
+
         base.OnStartup(e);
 
         _config = AppConfig.LoadOrCreate();
-        _mainViewModel = new MainViewModel(_config);
 
+        // doc/EasyAltium-componentimge.jfif simgesinden şeffaf PNG/BMP üret ve Altium Toolbar'a (DXP.RCS) kur
+        try
+        {
+            BrandIconProcessor.EnsureToolbarIconAssets(_config);
+            var toolbarInstaller = new AltiumToolbarInstaller(_config);
+            toolbarInstaller.InstallToolbarAndMenus();
+        }
+        catch
+        {
+        }
+
+        _mainViewModel = new MainViewModel(_config);
         _miniWindow = new MiniSearchWindow(_mainViewModel);
+        MainWindow = _miniWindow;
+
         _previewPopup = new PartPreviewPopup();
         _clipboardWatcher = new ClipboardWatcherService
         {
             IsEnabled = _config.AutoWatchClipboard
         };
-        _trayIcon = new TrayIconService(_config.AutoWatchClipboard);
+        _trayIcon = new TrayIconService(_config);
 
-        // Olay bağlantıları
         _miniWindow.SourceInitialized += (_, _) =>
         {
             _clipboardWatcher.AttachToWindow(_miniWindow);
-            _mainViewModel.AppendLog("Win32 Pano Dinleyici (AddClipboardFormatListener) aktif.");
+            _mainViewModel.AppendLog("Win32 Pano Dinleyici ve Altium Toolbar ikonu hazır.");
         };
 
         _mainViewModel.ClipboardListeningChanged += (_, enabled) =>
@@ -48,7 +77,8 @@ public partial class App : System.Windows.Application
 
         _mainViewModel.OpenSettingsRequested += (_, _) => ShowSettingsDialog();
 
-        _trayIcon.ShowMiniWindowRequested += (_, _) => ToggleMiniWindow();
+        _trayIcon.ShowMiniWindowRequested += (_, _) => ShowAndActivateMiniWindow();
+        _trayIcon.InstallToolbarRequested += (_, _) => InstallAltiumToolbarWithFeedback();
         _trayIcon.OpenSettingsRequested += (_, _) => ShowSettingsDialog();
         _trayIcon.ClipboardListeningToggled += (_, enabled) =>
         {
@@ -76,7 +106,48 @@ public partial class App : System.Windows.Application
             }
         };
 
+        StartSingleInstanceListener();
         _miniWindow.Show();
+    }
+
+    private void StartSingleInstanceListener()
+    {
+        if (_showWindowEvent is null)
+            return;
+
+        _ipcListenCts = new CancellationTokenSource();
+        CancellationToken token = _ipcListenCts.Token;
+
+        _ = Task.Run(() =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                int signaled = WaitHandle.WaitAny([_showWindowEvent, token.WaitHandle]);
+                if (signaled == 0 && !token.IsCancellationRequested)
+                {
+                    Dispatcher.BeginInvoke(ShowAndActivateMiniWindow);
+                }
+            }
+        }, token);
+    }
+
+    private void InstallAltiumToolbarWithFeedback()
+    {
+        if (_config is null || _mainViewModel is null)
+            return;
+
+        try
+        {
+            BrandIconProcessor.EnsureToolbarIconAssets(_config);
+            var installer = new AltiumToolbarInstaller(_config);
+            ToolbarInstallResult res = installer.InstallToolbarAndMenus();
+            _mainViewModel.AppendLog(res.Message);
+            _trayIcon?.ShowBalloonNotification("EasyAltium Toolbar", res.Message);
+        }
+        catch (Exception ex)
+        {
+            _mainViewModel.AppendLog($"Toolbar kurulum hatası: {ex.Message}");
+        }
     }
 
     private async Task OnClipboardPartCodeDetectedAsync(string lcscId)
@@ -94,22 +165,19 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private void ToggleMiniWindow()
+    private void ShowAndActivateMiniWindow()
     {
         if (_miniWindow is null)
             return;
 
-        if (_miniWindow.IsVisible)
-        {
-            _miniWindow.Hide();
-        }
-        else
-        {
+        if (!_miniWindow.IsVisible)
             _miniWindow.Show();
-            if (_miniWindow.WindowState == WindowState.Minimized)
-                _miniWindow.WindowState = WindowState.Normal;
-            _miniWindow.Activate();
-        }
+
+        if (_miniWindow.WindowState == WindowState.Minimized)
+            _miniWindow.WindowState = WindowState.Normal;
+
+        _miniWindow.Activate();
+        _miniWindow.Focus();
     }
 
     private void ShowSettingsDialog()
@@ -130,6 +198,7 @@ public partial class App : System.Windows.Application
 
     private void ShutdownApplication()
     {
+        _ipcListenCts?.Cancel();
         _clipboardWatcher?.Dispose();
         _trayIcon?.Dispose();
 
@@ -147,8 +216,10 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _ipcListenCts?.Cancel();
         _clipboardWatcher?.Dispose();
         _trayIcon?.Dispose();
+        _showWindowEvent?.Dispose();
         base.OnExit(e);
     }
 }
