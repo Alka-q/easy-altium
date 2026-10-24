@@ -55,12 +55,10 @@ public static partial class BrandIconProcessor
         <?xml version="1.0" encoding="utf-8"?>
         <svg version="1.1" id="EasyAltium_16" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 16 16" style="enable-background:new 0 0 16 16;" xml:space="preserve">
         <style type="text/css">
-            .st0{fill:#E2E8F0;}
-            .st1{fill:#38BDF8;}
+            .st0{fill:#FFFFFF;}
         </style>
-        <path class="st0" d="M15,12v1h-3v2H4v-2H1v-1h3V9H1V8h3V6H1V5h3V3H1V2h3V1h8v1h3v1h-3v2h3v1h-3v2h3v1h-3v3H15z"/>
-        <rect x="5" y="2" class="st1" width="6" height="12"/>
-        <circle cx="7" cy="4.5" r="1" fill="#0F172A"/>
+        <path class="st0" d="M12,1H4C3.4,1,3,1.4,3,2v1H1v1.4h2v1.9H1v1.4h2v1.9H1V11h2v1.9H1v1.4h2V14c0,0.6,0.4,1,1,1h8c0.6,0,1-0.4,1-1v-0.7h2v-1.4h-2V10h2V8.6h-2V6.7h2V5.3h-2V3.4h2V2h-2V2C13,1.4,12.6,1,12,1z M11.4,13.4H4.6V2.6h6.8V13.4z"/>
+        <circle class="st0" cx="6.4" cy="4.6" r="1.1"/>
         </svg>
         """;
 
@@ -170,12 +168,34 @@ public static partial class BrandIconProcessor
     private static Bitmap ResizeBitmapHighQuality(Bitmap source, int width, int height)
     {
         var dest = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        using Graphics g = Graphics.FromImage(dest);
-        g.Clear(System.Drawing.Color.Transparent);
-        g.SmoothingMode = SmoothingMode.HighQuality;
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.DrawImage(source, new Rectangle(1, 1, width - 2, height - 2));
+        using (Graphics g = Graphics.FromImage(dest))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.DrawImage(source, new Rectangle(0, 0, width, height));
+        }
+
+        // Küçültme (downsampling) sırasında ince çizgilerin soluklaşmasını önlemek için
+        // tüm çip piksellerini saf parlak beyaz (#FFFFFF) ve yüksek opaklığa güçlendir
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                System.Drawing.Color c = dest.GetPixel(x, y);
+                if (c.A > 18)
+                {
+                    int boostedAlpha = Math.Clamp(c.A * 3, 0, 255);
+                    dest.SetPixel(x, y, System.Drawing.Color.FromArgb(boostedAlpha, 255, 255, 255));
+                }
+                else
+                {
+                    dest.SetPixel(x, y, System.Drawing.Color.FromArgb(0, 0, 0, 0));
+                }
+            }
+        }
+
         return dest;
     }
 
