@@ -1,0 +1,55 @@
+# ============================================================================
+# EasyAltium (.NET 8 WPF + Altium Designer 26.10.1 + SQLite) .gitignore
+# ============================================================================
+
+# .NET / Visual Studio Build Outputs
+bin/
+obj/
+out/
+publish/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Altium Designer Temporary & History Files
+History/
+__Previews/
+*.PrjScrStructure
+*.htm
+*.LOG
+*~
+
+# IPC Runtime Logs (current_part.ini şablon olarak takip edilir, loglar hariç tutulur)
+ipc/*.log
+ipc/current_part.tmp.ini
+
+# Generated Libraries & SQLite Databases (Klasör yapısı .gitkeep ile korunur)
+Library/SchLib/*.SchLib
+!altium-bridge/Templates/*.SchLib
+Library/PcbLib/*.PcbLib
+Library/STEP/*.step
+Library/STEP/*.stp
+Library/DbLib/*.sqlite
+Library/DbLib/*.sqlite-shm
+Library/DbLib/*.sqlite-wal
+Library/DbLib/*.db
+Library/Fallback/*
+!Library/**/.gitkeep
+
+# External CLI Binaries
+tools/npnp/*.exe
+tools/npnp/*.zip
+!tools/npnp/.gitkeep
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
