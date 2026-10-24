@@ -7,6 +7,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AEF01023-549
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasyAltium.Core", "src\EasyAltium.Core\EasyAltium.Core.csproj", "{884D8B6D-562D-4548-BCDE-44CA24C5B187}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasyAltium.Host", "src\EasyAltium.Host\EasyAltium.Host.csproj", "{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +22,13 @@ Global
 		{884D8B6D-562D-4548-BCDE-44CA24C5B187}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{884D8B6D-562D-4548-BCDE-44CA24C5B187}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{884D8B6D-562D-4548-BCDE-44CA24C5B187}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{884D8B6D-562D-4548-BCDE-44CA24C5B187} = {AEF01023-5495-4478-B60D-600FC28A22C5}
+		{EFDA016E-B3FE-4D1D-B1A5-D12A1C52A1BB} = {AEF01023-5495-4478-B60D-600FC28A22C5}
 	EndGlobalSection
 EndGlobal
