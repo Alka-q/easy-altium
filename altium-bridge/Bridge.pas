@@ -297,12 +297,12 @@ begin
 
         if not FoundImpl then
         begin
-            SchImpl := Comp.AddCurrentFootprint;
+            SchImpl := Comp.AddSchImplementation;
             if SchImpl <> nil then
             begin
                 SchImpl.ModelName := FootprintRef;
                 SchImpl.ModelType := cDocKind_PcbLib;
-                SchImpl.ClearAllDataFileLinks;
+                SchImpl.ClearAllDatafileLinks;
                 if (Trim(PcbLibPath) <> '') and FileExists(PcbLibPath) then
                     SchImpl.AddDataFileLink(FootprintRef, PcbLibPath, cDocKind_PcbLib);
                 SchImpl.IsCurrent := True;
@@ -400,24 +400,18 @@ end;
 { Yardımcı Fonksiyon: Seçimi Temizler (Yeni Bileşeni İmlece Almak İçin)        }
 {------------------------------------------------------------------------------}
 procedure ClearSchematicSelection(SchDoc : ISch_Document);
-var
-    Iterator : ISch_Iterator;
-    Obj      : ISch_GraphicalObject;
 begin
     if SchDoc = nil then Exit;
 
-    Iterator := SchDoc.SchIterator_Create;
-    if Iterator = nil then Exit;
     try
-        Obj := Iterator.FirstSchObject;
-        while Obj <> nil do
-        begin
-            if Obj.Selection then
-                Obj.Selection := False;
-            Obj := Iterator.NextSchObject;
+        SchDoc.DeselectAll;
+    except
+        try
+            ResetParameters;
+            AddStringParameter('Action', 'All');
+            RunProcess('Sch:DeSelect');
+        except
         end;
-    finally
-        SchDoc.SchIterator_Destroy(Iterator);
     end;
 end;
 
@@ -608,7 +602,7 @@ begin
             Comp.I_ObjectAddress
         );
 
-        Comp.Selection := True;
+        Comp.SetState_Selection(True);
         Comp.GraphicallyInvalidate;
     finally
         SchServer.ProcessControl.PostProcess(SchDoc, '');
@@ -621,10 +615,10 @@ begin
     begin
         try
             ResetParameters;
-            RunProcess('Sch:MoveSelection');
-            WriteBridgeLog(LogFilePath, 'INFO', 'Bileşen fare imlecine bağlandı (Sch:MoveSelection).');
+            RunProcess('Sch:MoveSelectedObjects');
+            WriteBridgeLog(LogFilePath, 'INFO', 'Bileşen fare imlecine bağlandı (Sch:MoveSelectedObjects).');
         except
-            WriteBridgeLog(LogFilePath, 'WARN', 'Sch:MoveSelection başlatılamadı, bileşen şematiğe eklendi.');
+            WriteBridgeLog(LogFilePath, 'WARN', 'Sch:MoveSelectedObjects başlatılamadı, bileşen şematiğe eklendi.');
         end;
     end;
 
