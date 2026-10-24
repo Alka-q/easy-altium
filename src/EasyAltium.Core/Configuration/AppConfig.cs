@@ -268,10 +268,6 @@ public sealed class AppConfig
             dir = dir.Parent;
         }
 
-        const string fallbackWorkspace = @"D:\wb\antigravity\easyaltium-q";
-        if (Directory.Exists(fallbackWorkspace))
-            return fallbackWorkspace;
-
         return Directory.GetCurrentDirectory();
     }
 

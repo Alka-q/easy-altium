@@ -125,7 +125,7 @@ public sealed class AltiumToolbarInstaller
                 IsSuccess: false,
                 UpdatedProfileDirectories: [],
                 ToolbarIconPath: ToolbarPngIconPath,
-                Message: "%APPDATA%\\Altium altında Altium Designer kullanıcı profili bulunamadı.");
+                Message: "No Altium Designer user profile found under %APPDATA%\\Altium.");
         }
 
         string projectPath = NormalizePathDriveLetter(Path.GetFullPath(_config.BridgeScriptProjectPath));
@@ -156,7 +156,7 @@ public sealed class AltiumToolbarInstaller
             IsSuccess: true,
             UpdatedProfileDirectories: updatedProfiles,
             ToolbarIconPath: iconPath,
-            Message: $"EasyAltium üst araç çubuğu (Active Bar & Toolbar) ikonu {updatedProfiles.Count} Altium profiline kuruldu.");
+            Message: $"EasyAltium top toolbar (Active Bar & Toolbar) icon installed across {updatedProfiles.Count} Altium profile(s).");
     }
 
     public static string BuildUpdatedDxpRcsContent(

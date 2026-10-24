@@ -1,26 +1,79 @@
 {==============================================================================}
-{ EasyAltium (LCSC Loader) - Altium Designer 26.10.1 DelphiScript Köprüsü      }
-{ Dosya   : Bridge.pas                                                         }
-{ Proje   : LCSC_Bridge.PrjScr                                                 }
-{ Amaç    : C# İstemci Uygulamasının ürettiği current_part.ini sözleşmesini    }
-{           okuyarak kütüphaneleri (.SchLib, .PcbLib, .DbLib) Altium'a yükler, }
-{           aktif şematik (.SchDoc) açıksa sembolü, footprint bağlantısını ve  }
-{           tüm LCSC/JLCPCB BOM parametrelerini oluşturup imlece/şematiğe      }
-{           yerleştirir. Ayrıca karmaşık parçalar için MakeLibrary yedek       }
-{           (Fallback) akışını yürütür.                                        }
+{ EasyAltium (LCSC Loader) - Altium Designer DelphiScript Bridge               }
+{ File    : Bridge.pas                                                         }
+{ Project : LCSC_Bridge.PrjScr                                                 }
+{ Purpose : Reads the current_part.ini IPC contract produced by the EasyAltium }
+{           desktop host, installs/refreshes libraries (.SchLib, .PcbLib,      }
+{           .DbLib) in Altium Designer, and if an active schematic (.SchDoc)   }
+{           is open, instantiates the symbol with its footprint link and full  }
+{           LCSC/JLCPCB BOM parameters onto the interactive cursor or sheet.   }
+{           Also executes the MakeLibrary fallback workflow when requested.    }
 {                                                                              }
-{ CLI Tetikleme Komutu:                                                        }
+{ CLI Trigger Command:                                                         }
 { "C:\Program Files\Altium\AD26\X2.EXE"                                        }
-{   -RScriptingSystem:RunScript(ProjectName="<Yol>\LCSC_Bridge.PrjScr"|        }
+{   -RScriptingSystem:RunScript(ProjectName="<Path>\LCSC_Bridge.PrjScr"|       }
 {   ProcName="Bridge.pas>PlaceOrLoadComponent")                                }
 {==============================================================================}
 
-const
-    DEFAULT_WORKSPACE_INI = 'D:\wb\antigravity\easyaltium-q\ipc\current_part.ini';
-    DEFAULT_LOG_FILE      = 'D:\wb\antigravity\easyaltium-q\ipc\bridge_status.log';
+{------------------------------------------------------------------------------}
+{ Helper: Resolves the workspace root directory from LCSC_Bridge.PrjScr        }
+{------------------------------------------------------------------------------}
+function ResolveWorkspaceRootDir : String;
+var
+    Workspace : IWorkspace;
+    Project   : IProject;
+    ProjIndex : Integer;
+    ProjPath  : String;
+    ProjDir   : String;
+begin
+    Result := '';
+    Workspace := GetWorkspace;
+    if Workspace <> nil then
+    begin
+        for ProjIndex := 0 to Workspace.DM_ProjectCount - 1 do
+        begin
+            Project := Workspace.DM_Projects(ProjIndex);
+            if Project <> nil then
+            begin
+                ProjPath := Project.DM_ProjectFullPath;
+                if Pos('LCSC_BRIDGE.PRJSCR', UpperCase(ProjPath)) > 0 then
+                begin
+                    ProjDir := ExtractFilePath(ProjPath);
+                    Result := ExpandFileName(ProjDir + '..\');
+                    Exit;
+                end;
+            end;
+        end;
+    end;
+end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Dosyaya Zaman Damgalı Log Yazar                          }
+{ Helper: Resolves default log file path                                       }
+{------------------------------------------------------------------------------}
+function ResolveDefaultLogFilePath : String;
+var
+    WorkspaceDir : String;
+    LocalAppData : String;
+begin
+    WorkspaceDir := ResolveWorkspaceRootDir;
+    if WorkspaceDir <> '' then
+    begin
+        Result := WorkspaceDir + 'ipc\bridge_status.log';
+        Exit;
+    end;
+
+    LocalAppData := GetEnvironmentVariable('LOCALAPPDATA');
+    if LocalAppData <> '' then
+    begin
+        Result := LocalAppData + '\EasyAltium\ipc\bridge_status.log';
+        Exit;
+    end;
+
+    Result := 'bridge_status.log';
+end;
+
+{------------------------------------------------------------------------------}
+{ Helper: Appends a timestamped log line to the bridge log file                }
 {------------------------------------------------------------------------------}
 procedure WriteBridgeLog(const LogFilePath : String; const Level : String; const Msg : String);
 var
@@ -30,7 +83,7 @@ var
 begin
     TargetPath := Trim(LogFilePath);
     if TargetPath = '' then
-        TargetPath := DEFAULT_LOG_FILE;
+        TargetPath := ResolveDefaultLogFilePath;
 
     LogLines := TStringList.Create;
     try
@@ -42,7 +95,7 @@ begin
             LogLines.Add(LogLine);
             LogLines.SaveToFile(TargetPath);
         except
-            { Log yazma hatası ana akışı kesmemelidir }
+            { Logging errors must not interrupt the main placement workflow }
         end;
     finally
         LogLines.Free;
@@ -50,7 +103,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: LCSC_Bridge.PrjScr Konumundan IPC INI Yolunu Çözümler    }
+{ Helper: Resolves current_part.ini path from LCSC_Bridge.PrjScr or AppData    }
 {------------------------------------------------------------------------------}
 function ResolveIniFilePath : String;
 var
@@ -64,7 +117,7 @@ var
 begin
     Result := '';
 
-    { 1. Açık olan LCSC_Bridge.PrjScr projesinin dizinine göre ..\ipc\current_part.ini kontrolü }
+    { 1. Check ..\ipc\current_part.ini relative to the open LCSC_Bridge.PrjScr }
     Workspace := GetWorkspace;
     if Workspace <> nil then
     begin
@@ -95,7 +148,7 @@ begin
         end;
     end;
 
-    { 2. %LOCALAPPDATA%\EasyAltium\ipc\current_part.ini kontrolü }
+    { 2. Check %LOCALAPPDATA%\EasyAltium\ipc\current_part.ini mirror }
     LocalAppData := GetEnvironmentVariable('LOCALAPPDATA');
     if LocalAppData <> '' then
     begin
@@ -106,17 +159,10 @@ begin
             Exit;
         end;
     end;
-
-    { 3. Varsayılan çalışma alanı yolu }
-    if FileExists(DEFAULT_WORKSPACE_INI) then
-    begin
-        Result := DEFAULT_WORKSPACE_INI;
-        Exit;
-    end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: current_part.ini [Result] Bölümünü Günceller             }
+{ Helper: Updates the [Result] section in current_part.ini                     }
 {------------------------------------------------------------------------------}
 procedure UpdateIniResult(
     Ini            : TMemIniFile;
@@ -135,12 +181,12 @@ begin
         Ini.WriteString('Result', 'CompletedAt', DateTimeToStr(Now));
         Ini.UpdateFile;
     except
-        { INI geri yazma kilidi varsa yut }
+        { Ignore transient file lock if any }
     end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Kütüphane Altium'da Yüklü mü Kontrol Eder                }
+{ Helper: Checks if a library is already installed in Altium                   }
 {------------------------------------------------------------------------------}
 function IsLibraryAlreadyInstalled(const LibPath : String) : Boolean;
 var
@@ -170,7 +216,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Tekil Kütüphaneyi (.SchLib/.PcbLib/.DbLib) Yükler/Yeniler}
+{ Helper: Installs or refreshes a single library (.SchLib/.PcbLib/.DbLib)      }
 {------------------------------------------------------------------------------}
 procedure InstallOrRefreshSingleLibrary(const LibPath : String; const LogFilePath : String);
 var
@@ -180,35 +226,35 @@ begin
     if Trim(LibPath) = '' then Exit;
     if not FileExists(LibPath) then
     begin
-        WriteBridgeLog(LogFilePath, 'WARN', 'Kütüphane dosyası bulunamadı, atlanıyor: ' + LibPath);
+        WriteBridgeLog(LogFilePath, 'WARN', 'Library file not found, skipping: ' + LibPath);
         Exit;
     end;
 
     IntLibMan := IntegratedLibraryManager;
     if IntLibMan = nil then
     begin
-        WriteBridgeLog(LogFilePath, 'WARN', 'IntegratedLibraryManager erişilemedi.');
+        WriteBridgeLog(LogFilePath, 'WARN', 'IntegratedLibraryManager is unavailable.');
         Exit;
     end;
 
     try
         if IsLibraryAlreadyInstalled(LibPath) then
         begin
-            { Kütüphane diskte güncellendiyse kaldırıp tekrar ekleyerek önbelleği tazele }
+            { Re-install to refresh Altium's internal library cache if updated on disk }
             try
                 IntLibMan.UninstallLibrary(LibPath);
             except
             end;
             IntLibMan.InstallLibrary(LibPath);
-            WriteBridgeLog(LogFilePath, 'INFO', 'Yüklü kütüphane yenilendi: ' + LibPath);
+            WriteBridgeLog(LogFilePath, 'INFO', 'Installed library refreshed: ' + LibPath);
         end
         else
         begin
             IntLibMan.InstallLibrary(LibPath);
-            WriteBridgeLog(LogFilePath, 'INFO', 'Kütüphane Altium''a eklendi: ' + LibPath);
+            WriteBridgeLog(LogFilePath, 'INFO', 'Library installed into Altium: ' + LibPath);
         end;
 
-        { Eğer kütüphane dökümanı Altium editöründe açıksa görünümü tazele }
+        { Refresh open library document view if open in editor }
         if Client <> nil then
         begin
             if Client.IsDocumentOpen(LibPath) then
@@ -219,12 +265,12 @@ begin
             end;
         end;
     except
-        WriteBridgeLog(LogFilePath, 'ERROR', 'Kütüphane yüklenirken hata oluştu: ' + LibPath);
+        WriteBridgeLog(LogFilePath, 'ERROR', 'Error while installing library: ' + LibPath);
     end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Tüm İlgili Kütüphaneleri (.SchLib, .PcbLib, .DbLib) Kurar}
+{ Helper: Installs all relevant libraries (.SchLib, .PcbLib, .DbLib)           }
 {------------------------------------------------------------------------------}
 procedure EnsureLibrariesInstalled(Ini : TMemIniFile; const LogFilePath : String);
 var
@@ -253,7 +299,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Bileşene Footprint (PCBLIB) Bağlantısını Ekler/Günceller }
+{ Helper: Attaches or updates the PCB footprint implementation on a component  }
 {------------------------------------------------------------------------------}
 procedure AttachOrUpdateFootprint(
     Comp               : ISch_Component;
@@ -306,16 +352,16 @@ begin
                 if (Trim(PcbLibPath) <> '') and FileExists(PcbLibPath) then
                     SchImpl.AddDataFileLink(FootprintRef, PcbLibPath, cDocKind_PcbLib);
                 SchImpl.IsCurrent := True;
-                WriteBridgeLog(LogFilePath, 'INFO', 'Footprint bağlandı: ' + FootprintRef);
+                WriteBridgeLog(LogFilePath, 'INFO', 'Footprint linked: ' + FootprintRef);
             end;
         end;
     except
-        WriteBridgeLog(LogFilePath, 'WARN', 'Footprint eşleştirilirken uyarı oluştu: ' + FootprintRef);
+        WriteBridgeLog(LogFilePath, 'WARN', 'Warning while linking footprint: ' + FootprintRef);
     end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Tek Bir Şematik Parametresini Ekler veya Günceller       }
+{ Helper: Inserts or updates a single schematic component parameter            }
 {------------------------------------------------------------------------------}
 procedure UpsertComponentParameter(
     Comp            : ISch_Component;
@@ -363,7 +409,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: INI [Parameters] Bölümündeki Tüm BOM Alanlarını Yükler   }
+{ Helper: Applies all BOM parameters from INI [Parameters] section             }
 {------------------------------------------------------------------------------}
 procedure ApplyComponentParameters(
     Comp              : ISch_Component;
@@ -390,14 +436,14 @@ begin
                 UpsertComponentParameter(Comp, KeyName, KeyVal);
             end;
         end;
-        WriteBridgeLog(LogFilePath, 'INFO', IntToStr(ParamKeys.Count) + ' adet BOM parametresi bileşene işlendi.');
+        WriteBridgeLog(LogFilePath, 'INFO', IntToStr(ParamKeys.Count) + ' BOM parameters applied to component.');
     finally
         ParamKeys.Free;
     end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Seçimi Temizler (Yeni Bileşeni İmlece Almak İçin)        }
+{ Helper: Clears current schematic selection                                   }
 {------------------------------------------------------------------------------}
 procedure ClearSchematicSelection(SchDoc : ISch_Document);
 begin
@@ -416,7 +462,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: EasyEDA ASCII (.SchDoc/.PcbDoc) MakeLibrary Yedek Akışı  }
+{ Helper: Executes EasyEDA ASCII (.SchDoc/.PcbDoc) MakeLibrary fallback        }
 {------------------------------------------------------------------------------}
 function ExecuteFallbackMakeLibrary(Ini : TMemIniFile; const LogFilePath : String) : Boolean;
 var
@@ -429,11 +475,11 @@ begin
     FallbackSchDocPath := Ini.ReadString('LibraryPaths', 'FallbackSchDocPath', '');
     FallbackPcbDocPath := Ini.ReadString('LibraryPaths', 'FallbackPcbDocPath', '');
 
-    WriteBridgeLog(LogFilePath, 'INFO', 'Fallback MakeLibrary akışı başlatılıyor...');
+    WriteBridgeLog(LogFilePath, 'INFO', 'Starting Fallback MakeLibrary workflow...');
 
     if Client = nil then
     begin
-        WriteBridgeLog(LogFilePath, 'ERROR', 'Altium Client nesnesi erişilemedi.');
+        WriteBridgeLog(LogFilePath, 'ERROR', 'Altium Client object is unavailable.');
         Exit;
     end;
 
@@ -446,7 +492,7 @@ begin
                 Client.ShowDocument(OpenedSchDoc);
                 ResetParameters;
                 RunProcess('Sch:MakeLibrary');
-                WriteBridgeLog(LogFilePath, 'INFO', 'Sch:MakeLibrary tetiklendi: ' + FallbackSchDocPath);
+                WriteBridgeLog(LogFilePath, 'INFO', 'Sch:MakeLibrary triggered: ' + FallbackSchDocPath);
                 Result := True;
             end;
         end;
@@ -459,18 +505,18 @@ begin
                 Client.ShowDocument(OpenedPcbDoc);
                 ResetParameters;
                 RunProcess('PCB:MakeLibrary');
-                WriteBridgeLog(LogFilePath, 'INFO', 'PCB:MakeLibrary tetiklendi: ' + FallbackPcbDocPath);
+                WriteBridgeLog(LogFilePath, 'INFO', 'PCB:MakeLibrary triggered: ' + FallbackPcbDocPath);
                 Result := True;
             end;
         end;
     except
-        WriteBridgeLog(LogFilePath, 'ERROR', 'Fallback MakeLibrary sırasında istisna oluştu.');
+        WriteBridgeLog(LogFilePath, 'ERROR', 'Exception occurred during Fallback MakeLibrary.');
         Result := False;
     end;
 end;
 
 {------------------------------------------------------------------------------}
-{ Yardımcı Fonksiyon: Bileşeni Aktif Şematiğe (.SchDoc) Yükler ve Yerleştirir  }
+{ Helper: Loads and places the component onto the active schematic (.SchDoc)   }
 {------------------------------------------------------------------------------}
 function PlaceComponentOnSchematic(
     SchDoc            : ISch_Document;
@@ -507,7 +553,7 @@ begin
         EffectiveLibRef := Ini.ReadString('LibraryPaths', 'PassiveTemplateLibRef', PrimaryLibRef);
         if (Trim(EffectiveSchLib) = '') or (not FileExists(EffectiveSchLib)) then
         begin
-            WriteBridgeLog(LogFilePath, 'WARN', 'Pasif şablon kütüphanesi bulunamadı, LCSC sembolüne dönülüyor.');
+            WriteBridgeLog(LogFilePath, 'WARN', 'Passive template library not found; falling back to LCSC symbol.');
             EffectiveSchLib := PrimarySchLib;
             EffectiveLibRef := PrimaryLibRef;
         end;
@@ -530,10 +576,10 @@ begin
     WriteBridgeLog(
         LogFilePath,
         'INFO',
-        'Sembol yükleniyor -> LibRef: ' + EffectiveLibRef + ' | Kütüphane: ' + EffectiveSchLib
+        'Loading symbol -> LibRef: ' + EffectiveLibRef + ' | Library: ' + EffectiveSchLib
     );
 
-    { 1. SchServer.LoadComponentFromLibrary ile bileşen örneğini oluştur }
+    { 1. Instantiate component via SchServer.LoadComponentFromLibrary }
     Comp := nil;
     try
         if FileExists(EffectiveSchLib) and (Trim(EffectiveLibRef) <> '') then
@@ -542,13 +588,13 @@ begin
         Comp := nil;
     end;
 
-    { 2. Eğer LoadComponentFromLibrary nil dönerse IntegratedLibraryManager.PlaceLibraryComponent yedeğini dene }
+    { 2. If LoadComponentFromLibrary returns nil, try IntegratedLibraryManager.PlaceLibraryComponent }
     if Comp = nil then
     begin
         WriteBridgeLog(
             LogFilePath,
             'WARN',
-            'SchServer.LoadComponentFromLibrary nil döndü, IntegratedLibraryManager.PlaceLibraryComponent deneniyor.'
+            'SchServer.LoadComponentFromLibrary returned nil; trying IntegratedLibraryManager.PlaceLibraryComponent.'
         );
         IntLibMan := IntegratedLibraryManager;
         if (IntLibMan <> nil) and FileExists(EffectiveSchLib) then
@@ -558,19 +604,19 @@ begin
                 Result := True;
                 Exit;
             except
-                WriteBridgeLog(LogFilePath, 'ERROR', 'PlaceLibraryComponent çağrısı başarısız oldu.');
+                WriteBridgeLog(LogFilePath, 'ERROR', 'PlaceLibraryComponent call failed.');
                 Exit;
             end;
         end;
         Exit;
     end;
 
-    { 3. Undo/Redo Yığını ve Şematik Konteyner İşlemlerini Başlat }
+    { 3. Begin Undo/Redo stack and schematic container registration }
     SchServer.ProcessControl.PreProcess(SchDoc, '');
     try
         ClearSchematicSelection(SchDoc);
 
-        { Designator, Comment ve Description ayarları }
+        { Configure Designator, Comment, and Description }
         if Comp.Designator <> nil then
         begin
             Comp.Designator.Text     := DesignatorPrefix;
@@ -589,11 +635,11 @@ begin
         Comp.CurrentPartID := 1;
         Comp.Location      := Point(MilsToCoord(TargetX_Mils), MilsToCoord(TargetY_Mils));
 
-        { Footprint ve BOM Parametrelerini İşle }
+        { Attach Footprint and BOM Parameters }
         AttachOrUpdateFootprint(Comp, FootprintRef, PcbLibPath, LogFilePath);
         ApplyComponentParameters(Comp, Ini, LogFilePath);
 
-        { Bileşeni Aktif Şematiğe Kaydet }
+        { Register component in active schematic document }
         SchDoc.RegisterSchObjectInContainer(Comp);
         SchServer.RobotManager.SendMessage(
             SchDoc.I_ObjectAddress,
@@ -610,15 +656,15 @@ begin
 
     SchDoc.GraphicallyInvalidate;
 
-    { 4. InteractiveCursor modundaysa bileşeni fare imlecinin ucuna taşıma modunda ver }
+    { 4. If InteractiveCursor mode is enabled, attach component to user cursor }
     if UpperCase(Trim(PlacementMethod)) = 'INTERACTIVECURSOR' then
     begin
         try
             ResetParameters;
             RunProcess('Sch:MoveSelectedObjects');
-            WriteBridgeLog(LogFilePath, 'INFO', 'Bileşen fare imlecine bağlandı (Sch:MoveSelectedObjects).');
+            WriteBridgeLog(LogFilePath, 'INFO', 'Component attached to cursor (Sch:MoveSelectedObjects).');
         except
-            WriteBridgeLog(LogFilePath, 'WARN', 'Sch:MoveSelectedObjects başlatılamadı, bileşen şematiğe eklendi.');
+            WriteBridgeLog(LogFilePath, 'WARN', 'Sch:MoveSelectedObjects could not start; component placed on sheet.');
         end;
     end;
 
@@ -626,8 +672,8 @@ begin
 end;
 
 {==============================================================================}
-{ ANA GİRİŞ NOKTASI (CLI Entry Point): PlaceOrLoadComponent                    }
-{ C# Host tarafından X2.EXE -RScriptingSystem:RunScript ile çağrılır.          }
+{ MAIN CLI ENTRY POINT: PlaceOrLoadComponent                                   }
+{ Invoked by EasyAltium Host via X2.EXE -RScriptingSystem:RunScript.           }
 {==============================================================================}
 procedure PlaceOrLoadComponent;
 var
@@ -648,14 +694,14 @@ begin
     IniPath := ResolveIniFilePath;
     if (IniPath = '') or (not FileExists(IniPath)) then
     begin
-        WriteBridgeLog(DEFAULT_LOG_FILE, 'ERROR', 'current_part.ini bulunamadı.');
-        ShowMessage('EasyAltium Köprü Hatası: current_part.ini dosyası bulunamadı!');
+        WriteBridgeLog(ResolveDefaultLogFilePath, 'ERROR', 'current_part.ini not found.');
+        ShowMessage('EasyAltium Bridge Error: current_part.ini file not found!');
         Exit;
     end;
 
     Ini := TMemIniFile.Create(IniPath);
     try
-        LogFilePath       := Ini.ReadString('Transaction', 'LogFilePath', DEFAULT_LOG_FILE);
+        LogFilePath       := Ini.ReadString('Transaction', 'LogFilePath', ResolveDefaultLogFilePath);
         Action            := Ini.ReadString('Transaction', 'Action', 'PlaceOrLoad');
         LcscId            := Ini.ReadString('Component', 'LcscId', '');
         LibRef            := Ini.ReadString('Component', 'LibRef', '');
@@ -666,36 +712,36 @@ begin
         WriteBridgeLog(
             LogFilePath,
             'INFO',
-            '=== PlaceOrLoadComponent Başladı | LCSC: ' + LcscId + ' | LibRef: ' + LibRef + ' | Action: ' + Action + ' ==='
+            '=== PlaceOrLoadComponent Started | LCSC: ' + LcscId + ' | LibRef: ' + LibRef + ' | Action: ' + Action + ' ==='
         );
 
         UpdateIniResult(Ini, 'RUNNING', Action, 'None', '');
 
-        { 1. Yedek (Fallback) MakeLibrary Akışı Kontrolü }
+        { 1. Check Fallback MakeLibrary Workflow }
         if UpperCase(Trim(Action)) = 'FALLBACKMAKELIBRARY' then
         begin
             FallbackOk := ExecuteFallbackMakeLibrary(Ini, LogFilePath);
             if FallbackOk then
                 UpdateIniResult(Ini, 'SUCCESS', 'FallbackMakeLibrary', Ini.ReadString('LibraryPaths', 'FallbackSchDocPath', 'MakeLibrary'), '')
             else
-                UpdateIniResult(Ini, 'ERROR', 'FallbackMakeLibrary', 'None', 'MakeLibrary başarısız oldu.');
+                UpdateIniResult(Ini, 'ERROR', 'FallbackMakeLibrary', 'None', 'MakeLibrary failed.');
             Exit;
         end;
 
-        { 2. İlgili .SchLib, .PcbLib ve .DbLib Dosyalarını Altium'a Kur / Yenile }
+        { 2. Install / Refresh .SchLib, .PcbLib, and .DbLib in Altium }
         EnsureLibrariesInstalled(Ini, LogFilePath);
 
-        { Sadece kütüphane yükleme istendiyse burada tamamla }
+        { Complete here if only library loading was requested }
         if UpperCase(Trim(Action)) = 'LOADONLY' then
         begin
             UpdateIniResult(Ini, 'SUCCESS', 'LoadOnly', SchLibPath, '');
-            WriteBridgeLog(LogFilePath, 'INFO', 'Sadece kütüphane yükleme (LoadOnly) başarıyla tamamlandı.');
+            WriteBridgeLog(LogFilePath, 'INFO', 'Library load (LoadOnly) completed successfully.');
             if SilentMode = 0 then
-                ShowMessage('EasyAltium: ' + LcscId + ' (' + LibRef + ') kütüphaneye eklendi.');
+                ShowMessage('EasyAltium: ' + LcscId + ' (' + LibRef + ') added to library.');
             Exit;
         end;
 
-        { 3. Aktif Şematik (.SchDoc) Kontrolü ve Bileşen Yerleştirme }
+        { 3. Check Active Schematic (.SchDoc) and Place Component }
         CurrentSchDoc := nil;
         if SchServer <> nil then
             CurrentSchDoc := SchServer.GetCurrentSchDocument;
@@ -709,7 +755,7 @@ begin
                 WriteBridgeLog(
                     LogFilePath,
                     'INFO',
-                    'Bileşen aktif şematiğe yerleştirildi: ' + CurrentSchDoc.DocumentName
+                    'Component placed on active schematic: ' + CurrentSchDoc.DocumentName
                 );
             end
             else
@@ -719,17 +765,17 @@ begin
                     'ERROR',
                     'PlaceFailed',
                     CurrentSchDoc.DocumentName,
-                    'Sembol kütüphaneden yüklenemedi: ' + LibRef
+                    'Could not load symbol from library: ' + LibRef
                 );
-                WriteBridgeLog(LogFilePath, 'ERROR', 'Sembol kütüphaneden yüklenemedi: ' + LibRef);
+                WriteBridgeLog(LogFilePath, 'ERROR', 'Could not load symbol from library: ' + LibRef);
                 if SilentMode = 0 then
-                    ShowMessage('EasyAltium: Sembol kütüphaneden yüklenemedi (' + LibRef + ').');
+                    ShowMessage('EasyAltium: Could not load symbol from library (' + LibRef + ').');
             end;
         end
         else
         begin
-            { Aktif bir .SchDoc açık değilse }
-            WriteBridgeLog(LogFilePath, 'INFO', 'Aktif .SchDoc bulunamadı. Kütüphane yüklendi.');
+            { No active .SchDoc is currently open }
+            WriteBridgeLog(LogFilePath, 'INFO', 'No active .SchDoc found. Library installed.');
             if (OpenLibIfNoSchDoc = 1) and FileExists(SchLibPath) and (Client <> nil) then
             begin
                 OpenedLibDoc := Client.OpenDocument('SchLib', SchLibPath);
@@ -742,8 +788,8 @@ begin
                 UpdateIniResult(Ini, 'SUCCESS', 'LibraryInstalledNoActiveSchDoc', SchLibPath, '');
                 if SilentMode = 0 then
                     ShowMessage(
-                        'EasyAltium: ' + LcscId + ' (' + LibRef + ') kütüphaneye yüklendi. ' +
-                        'Yerleştirmek için bir şematik (.SchDoc) açın.'
+                        'EasyAltium: ' + LcscId + ' (' + LibRef + ') installed into library. ' +
+                        'Open a schematic (.SchDoc) to place it.'
                     );
             end;
         end;
@@ -753,8 +799,8 @@ begin
 end;
 
 {==============================================================================}
-{ YARDIMCI GİRİŞ NOKTASI: RunFallbackMakeLibrary                               }
-{ Doğrudan MakeLibrary yedeğini CLI üzerinden çağırmak için alternatif giriş   }
+{ HELPER ENTRY POINT: RunFallbackMakeLibrary                                   }
+{ Alternative entry point to invoke MakeLibrary fallback directly via CLI      }
 {==============================================================================}
 procedure RunFallbackMakeLibrary;
 var
@@ -767,20 +813,20 @@ begin
 
     Ini := TMemIniFile.Create(IniPath);
     try
-        LogFilePath := Ini.ReadString('Transaction', 'LogFilePath', DEFAULT_LOG_FILE);
+        LogFilePath := Ini.ReadString('Transaction', 'LogFilePath', ResolveDefaultLogFilePath);
         if ExecuteFallbackMakeLibrary(Ini, LogFilePath) then
             UpdateIniResult(Ini, 'SUCCESS', 'FallbackMakeLibrary', 'MakeLibrary', '')
         else
-            UpdateIniResult(Ini, 'ERROR', 'FallbackMakeLibrary', 'MakeLibrary', 'MakeLibrary hatası');
+            UpdateIniResult(Ini, 'ERROR', 'FallbackMakeLibrary', 'MakeLibrary', 'MakeLibrary error');
     finally
         Ini.Free;
     end;
 end;
 
 {==============================================================================}
-{ TOOLBAR GİRİŞ NOKTASI: LaunchOrShowEasyAltium                                }
-{ Altium üst araç çubuğundaki (Toolbar) EasyAltium çip ikonuna tıklandığında   }
-{ masaüstü istemci uygulamasını başlatır veya açık olan pencereyi öne getirir. }
+{ TOOLBAR ENTRY POINT: LaunchOrShowEasyAltium                                  }
+{ Launches or brings forward the EasyAltium desktop host when the toolbar      }
+{ icon is clicked inside Altium Designer.                                      }
 {==============================================================================}
 procedure LaunchOrShowEasyAltium;
 var
@@ -788,26 +834,31 @@ var
     WorkspaceDir : String;
     HostExePath  : String;
 begin
-    HostExePath := 'D:\wb\antigravity\easyaltium-q\src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
+    HostExePath := '';
+    WorkspaceDir := ResolveWorkspaceRootDir;
 
-    if not FileExists(HostExePath) then
+    if WorkspaceDir = '' then
     begin
         IniPath := ResolveIniFilePath;
         if IniPath <> '' then
-        begin
             WorkspaceDir := ExpandFileName(ExtractFilePath(IniPath) + '..\');
-            HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
-            if not FileExists(HostExePath) then
-                HostExePath := WorkspaceDir + 'EasyAltium.exe';
-        end;
     end;
 
-    if FileExists(HostExePath) then
+    if WorkspaceDir <> '' then
+    begin
+        HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Release\net8.0-windows\EasyAltium.exe';
+        if not FileExists(HostExePath) then
+            HostExePath := WorkspaceDir + 'src\EasyAltium.Host\bin\Debug\net8.0-windows\EasyAltium.exe';
+        if not FileExists(HostExePath) then
+            HostExePath := WorkspaceDir + 'EasyAltium.exe';
+    end;
+
+    if (HostExePath <> '') and FileExists(HostExePath) then
     begin
         RunApplication('"' + HostExePath + '" --show');
     end
     else
     begin
-        ShowMessage('EasyAltium istemci uygulaması bulunamadı: ' + HostExePath);
+        ShowMessage('EasyAltium desktop client executable not found: ' + HostExePath);
     end;
 end;

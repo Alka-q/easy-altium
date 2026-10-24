@@ -80,8 +80,8 @@ public sealed class AltiumCliTrigger
 
         if (!File.Exists(_config.AltiumExecutablePath))
         {
-            string msg = $"Altium yürütülebilir dosyası bulunamadı: {_config.AltiumExecutablePath}. " +
-                         "current_part.ini hazırlandı; Altium içerisinden Bridge.pas>PlaceOrLoadComponent çalıştırılabilir.";
+            string msg = $"Altium executable not found: {_config.AltiumExecutablePath}. " +
+                         "current_part.ini is ready; Bridge.pas>PlaceOrLoadComponent can be run from inside Altium.";
             _logger.LogWarning("{Message}", msg);
 
             return new AltiumTriggerResult(

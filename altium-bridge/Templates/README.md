@@ -1,11 +1,11 @@
-# Pasif Eleman Standart Sembol Şablonları (`Standard_Passives.SchLib`)
+# Passive Component Standard Symbol Templates (`Standard_Passives.SchLib`)
 
-Bu dizin, **Pasif Eleman Sembol Filtresi** ("Kendi Standart Sembolümü Kullan" seçeneği) aktif olduğunda kullanılır.
+This directory is used when the **Passive Symbol Template Filter** (*"Use Standard Symbol for Passives (R/C/L)"*) option is enabled in EasyAltium.
 
-## Desteklenen Standart Sembol Referansları (`PassiveTemplateLibRef`)
-- `RES_STD` : Standart Direnç Sembolü (2 Pin: `1`, `2`)
-- `CAP_NP_STD` : Kutupsuz Kapasitör Sembolü (2 Pin: `1`, `2`)
-- `CAP_POL_STD` : Kutuplu / Elektrolitik Kapasitör Sembolü (2 Pin: `1`, `2`)
-- `IND_STD` : Standart İndüktör / Bobin Sembolü (2 Pin: `1`, `2`)
+## Supported Standard Symbol References (`PassiveTemplateLibRef`)
+- `RES_STD` : Standard Resistor Symbol (2 Pins: `1`, `2`)
+- `CAP_NP_STD` : Non-Polarized Capacitor Symbol (2 Pins: `1`, `2`)
+- `CAP_POL_STD` : Polarized / Electrolytic Capacitor Symbol (2 Pins: `1`, `2`)
+- `IND_STD` : Standard Inductor / Ferrite Bead Symbol (2 Pins: `1`, `2`)
 
-Kullanıcı kendi kurumsal `Standard_Passives.SchLib` dosyasını bu dizine koyduğunda veya Ayarlar penceresinden seçtiğinde, `Bridge.pas` sembol grafiğini bu şablondan alır; **Footprint**, **3D STEP Model** ve **LCSC/JLCPCB BOM Parametrelerini** ise indirilen LCSC parçasından otomatik eşleştirir.
+When you place your custom `Standard_Passives.SchLib` file in this directory (or select a custom path in the Settings window), `Bridge.pas` loads the schematic symbol graphic from your template while automatically attaching the **PCB Footprint**, **3D STEP Model**, and **LCSC/JLCPCB BOM Parameters** from the fetched LCSC component.

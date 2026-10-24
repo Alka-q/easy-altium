@@ -1,5 +1,5 @@
 # ============================================================================
-# EasyAltium (.NET 8 WPF + Altium Designer 26.10.1 + SQLite) .gitignore
+# EasyAltium (.NET 8 WPF + Altium Designer + SQLite) .gitignore
 # ============================================================================
 
 # .NET / Visual Studio Build Outputs
@@ -25,17 +25,24 @@ __Previews/
 *.htm
 *.LOG
 *~
+*.bak
 
-# IPC Runtime Logs (current_part.ini şablon olarak takip edilir, loglar hariç tutulur)
-ipc/*.log
+# Local Runtime IPC & Configuration Files (Examples are tracked instead)
+ipc/appsettings.json
+ipc/current_part.ini
 ipc/current_part.tmp.ini
+ipc/*.log
+ipc/*.tmp
 
-# Generated Libraries & SQLite Databases (Klasör yapısı .gitkeep ile korunur)
+# Generated Component Libraries & SQLite Databases (Folder structure kept via .gitkeep)
+Library/.staging/
+Library/*.json
 Library/SchLib/*.SchLib
 !altium-bridge/Templates/*.SchLib
 Library/PcbLib/*.PcbLib
 Library/STEP/*.step
 Library/STEP/*.stp
+Library/DbLib/*.DbLib
 Library/DbLib/*.sqlite
 Library/DbLib/*.sqlite-shm
 Library/DbLib/*.sqlite-wal
@@ -43,10 +50,14 @@ Library/DbLib/*.db
 Library/Fallback/*
 !Library/**/.gitkeep
 
-# External CLI Binaries
+# External CLI Binaries (License file and .gitkeep are tracked)
 tools/npnp/*.exe
 tools/npnp/*.zip
 !tools/npnp/.gitkeep
+!tools/npnp/LICENSE_npnp.txt
+
+# Internal / Scratch Files
+gemini-code-*.md
 
 # OS & Editor Files
 .DS_Store

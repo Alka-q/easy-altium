@@ -1,7 +1,7 @@
 <Window x:Class="EasyAltium.Host.Views.PartPreviewPopup"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EasyAltium — LCSC Parça Yakalandı"
+        Title="EasyAltium — LCSC Part Detected"
         Width="370"
         Height="210"
         WindowStyle="None"
@@ -25,7 +25,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Başlık -->
+            <!-- Header -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -33,7 +33,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="PANO YAKALANDI:"
+                    <TextBlock Text="CLIPBOARD DETECTED:"
                                FontSize="11"
                                FontWeight="Bold"
                                Foreground="#F59E0B"
@@ -59,7 +59,7 @@
                 </Border>
             </Grid>
 
-            <!-- Meta Veri Özeti -->
+            <!-- Metadata Summary -->
             <StackPanel Grid.Row="1" VerticalAlignment="Center">
                 <TextBlock x:Name="MpnAndBrandText"
                            Text="RP2040 — Raspberry Pi"
@@ -68,7 +68,7 @@
                            Foreground="#F3F4F6"
                            TextTrimming="CharacterEllipsis" />
                 <TextBlock x:Name="PackageAndStockText"
-                           Text="Kılıf: QFN-56 | Stok: 48,520 | Fiyat: $0.8024"
+                           Text="Package: QFN-56 | Stock: 48,520 | Price: $0.8024"
                            FontSize="11.5"
                            Foreground="#10B981"
                            Margin="0,4,0,0" />
@@ -80,7 +80,7 @@
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
-            <!-- Butonlar -->
+            <!-- Action Buttons -->
             <Grid Grid.Row="2" Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -89,7 +89,7 @@
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0"
-                        Content="Altium'a Yerleştir"
+                        Content="Place in Altium"
                         Click="PlaceButton_OnClick"
                         Background="#10B981"
                         Foreground="#06281E"
@@ -100,7 +100,7 @@
                         Cursor="Hand" />
 
                 <Button Grid.Column="1"
-                        Content="Kütüphaneye Ekle"
+                        Content="Add to Library"
                         Click="LoadOnlyButton_OnClick"
                         Background="#262B36"
                         Foreground="#E5E7EB"
@@ -110,7 +110,7 @@
                         Cursor="Hand" />
 
                 <Button Grid.Column="2"
-                        Content="Kapat"
+                        Content="Close"
                         Click="DismissButton_OnClick"
                         Background="Transparent"
                         Foreground="#9CA3AF"

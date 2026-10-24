@@ -9,7 +9,7 @@ using EasyAltium.Core.Models;
 namespace EasyAltium.Host.ViewModels;
 
 /// <summary>
-/// Ana mini pencere ve pano yakalama akışlarını yöneten ViewModel.
+/// ViewModel managing the main mini search window and clipboard capture workflows.
 /// </summary>
 public sealed class MainViewModel : ObservableObject
 {
@@ -20,7 +20,7 @@ public sealed class MainViewModel : ObservableObject
     private string _searchLcscId = "C2040";
     private LcscPartMetadata? _currentPart;
     private bool _isBusy;
-    private string _statusMessage = "Hazır — LCSC parça kodu girin veya tarayıcıdan kopyalayın (Örn: C2040).";
+    private string _statusMessage = "Ready — Enter an LCSC part code or copy one from your browser (e.g., C2040).";
     private bool _isClipboardListening;
     private bool _alwaysOnTop;
     private bool _isSqliteMode;
@@ -138,7 +138,7 @@ public sealed class MainViewModel : ObservableObject
                 _config.AutoWatchClipboard = value;
                 _config.Save();
                 ClipboardListeningChanged?.Invoke(this, value);
-                AppendLog(value ? "Pano dinleyici aktif edildi." : "Pano dinleyici duraklatıldı.");
+                AppendLog(value ? "Clipboard watcher enabled." : "Clipboard watcher paused.");
             }
         }
     }
@@ -167,15 +167,15 @@ public sealed class MainViewModel : ObservableObject
                 _config.Save();
                 OnPropertyChanged(nameof(LibraryModeBadgeText));
                 AppendLog(value
-                    ? "Kütüphane modu: Mod B (Profesyonel SQLite .DbLib) seçildi."
-                    : "Kütüphane modu: Mod A (LCSC_Master Ortak Kütüphane) seçildi.");
+                    ? "Library mode: Mode B (Categorized SQLite .DbLib) selected."
+                    : "Library mode: Mode A (Consolidated LCSC_Master) selected.");
             }
         }
     }
 
     public string LibraryModeBadgeText => IsSqliteMode
-        ? $"Mod B: SQLite .DbLib ({DatabaseComponentCount} Parça)"
-        : "Mod A: LCSC_Master.SchLib";
+        ? $"Mode B: SQLite .DbLib ({DatabaseComponentCount} Parts)"
+        : "Mode A: LCSC_Master.SchLib";
 
     public bool UsePassiveTemplateSymbol
     {
@@ -187,8 +187,8 @@ public sealed class MainViewModel : ObservableObject
                 _config.UsePassiveTemplateSymbol = value;
                 _config.Save();
                 AppendLog(value
-                    ? "Pasif eleman sembol filtresi: Yerel Standart Sembol aktif."
-                    : "Pasif eleman sembol filtresi: Orijinal EasyEDA sembolü aktif.");
+                    ? "Passive symbol filter: Local Standard Symbol enabled."
+                    : "Passive symbol filter: Original EasyEDA symbol enabled.");
             }
         }
     }
@@ -208,28 +208,28 @@ public sealed class MainViewModel : ObservableObject
         string? normalized = LcscPartMetadata.TryExtractLcscId(rawCode);
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            StatusMessage = "Geçersiz LCSC parça kodu! Örn: C2040 veya C14663 girin.";
-            AppendLog($"Hata: '{rawCode}' geçerli bir LCSC kodu (^C[1-9]\\d{{2,}}$) değil.");
+            StatusMessage = "Invalid LCSC part code! Enter e.g. C2040 or C14663.";
+            AppendLog($"Error: '{rawCode}' is not a valid LCSC part code (^C[1-9]\\d{{2,}}$).");
             return null;
         }
 
         SearchLcscId = normalized;
         IsBusy = true;
-        StatusMessage = $"{normalized} meta verileri LCSC & JLCPCB üzerinden çekiliyor...";
-        AppendLog($"{normalized} sorgulanıyor...");
+        StatusMessage = $"Fetching metadata for {normalized} from LCSC & JLCPCB...";
+        AppendLog($"Querying {normalized}...");
 
         try
         {
             LcscPartMetadata metadata = await _orchestrator.PreviewPartAsync(normalized);
             CurrentPart = metadata;
-            StatusMessage = $"{metadata.LcscId} — {metadata.Mpn} ({metadata.Package}) | Stok: {metadata.Stock:N0} | JLCPCB {metadata.JlcpcbClass}";
-            AppendLog($"Önizleme hazır: {metadata.LcscId} -> {metadata.Mpn} [{metadata.Category}]");
+            StatusMessage = $"{metadata.LcscId} — {metadata.Mpn} ({metadata.Package}) | Stock: {metadata.Stock:N0} | JLCPCB {metadata.JlcpcbClass}";
+            AppendLog($"Preview ready: {metadata.LcscId} -> {metadata.Mpn} [{metadata.Category}]");
             return metadata;
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Sorgu hatası: {ex.Message}";
-            AppendLog($"Hata ({normalized}): {ex.Message}");
+            StatusMessage = $"Query error: {ex.Message}";
+            AppendLog($"Error ({normalized}): {ex.Message}");
             return null;
         }
         finally
@@ -262,8 +262,8 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Aktarım hatası: {ex.Message}";
-            AppendLog($"KRİTİK HATA: {ex.Message}");
+            StatusMessage = $"Import error: {ex.Message}";
+            AppendLog($"CRITICAL ERROR: {ex.Message}");
             return null;
         }
         finally
@@ -334,7 +334,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            AppendLog($"Datasheet açılamadı: {ex.Message}");
+            AppendLog($"Could not open datasheet: {ex.Message}");
         }
     }
 }

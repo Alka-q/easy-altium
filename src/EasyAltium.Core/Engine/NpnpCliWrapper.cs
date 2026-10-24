@@ -98,13 +98,13 @@ public sealed class NpnpCliWrapper
                         StepModelPath: string.Empty,
                         ExitCode: -1,
                         StandardOutput: string.Empty,
-                        StandardError: "npnp süreci başlatılamadı.",
-                        ErrorReason: "npnp süreci başlatılamadı.");
+                        StandardError: "Could not start npnp process.",
+                        ErrorReason: "Could not start npnp process.");
                 }
             }
             catch (Exception startEx)
             {
-                _logger.LogWarning(startEx, "npnp yürütülebilir dosyası çalıştırılamadı ({Exe}). Fallback akışına geçilecek.", _config.NpnpExecutablePath);
+                _logger.LogWarning(startEx, "Could not execute npnp binary ({Exe}). Switching to fallback workflow.", _config.NpnpExecutablePath);
                 return new NpnpExportResult(
                     IsSuccess: false,
                     RequiresFallback: true,
@@ -114,7 +114,7 @@ public sealed class NpnpCliWrapper
                     ExitCode: -1,
                     StandardOutput: string.Empty,
                     StandardError: startEx.Message,
-                    ErrorReason: $"npnp bulunamadı veya başlatılamadı: {startEx.Message}");
+                    ErrorReason: $"npnp not found or failed to start: {startEx.Message}");
             }
 
             process.BeginOutputReadLine();
@@ -139,7 +139,7 @@ public sealed class NpnpCliWrapper
                     ExitCode: -2,
                     StandardOutput: stdOutBuilder.ToString(),
                     StandardError: stdErrBuilder.ToString(),
-                    ErrorReason: $"npnp {_config.NpnpTimeoutSeconds} saniye içinde tamamlanamadı (Zaman aşımı).");
+                    ErrorReason: $"npnp timed out after {_config.NpnpTimeoutSeconds} seconds.");
             }
 
             string stdOut = stdOutBuilder.ToString();
@@ -148,7 +148,7 @@ public sealed class NpnpCliWrapper
             if (process.ExitCode != 0)
             {
                 _logger.LogWarning(
-                    "npnp hata kodu ile çıktı (ExitCode={ExitCode}, LCSC={LcscId}). StdErr: {StdErr}",
+                    "npnp exited with error (ExitCode={ExitCode}, LCSC={LcscId}). StdErr: {StdErr}",
                     process.ExitCode, part.LcscId, stdErr);
 
                 return new NpnpExportResult(
@@ -160,7 +160,7 @@ public sealed class NpnpCliWrapper
                     ExitCode: process.ExitCode,
                     StandardOutput: stdOut,
                     StandardError: stdErr,
-                    ErrorReason: $"npnp çıkış kodu {process.ExitCode}: {stdErr.Trim()}");
+                    ErrorReason: $"npnp exit code {process.ExitCode}: {stdErr.Trim()}");
             }
 
             // 3D STEP modelini de indir (npnp model <LCSC_ID> -o "<stagingDir>" --force)

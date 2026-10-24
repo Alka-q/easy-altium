@@ -1,0 +1,80 @@
+EasyAltium Open-Source Attribution & Non-Commercial Share-Alike License
+Version 1.0
+
+Copyright (c) 2026 Osman Ceylan (Alka-q). All rights reserved.
+
+1. Permission
+
+Permission is granted to use, copy, study, modify, and distribute this
+software and its source code solely for non-commercial purposes, provided
+that all conditions in this license are followed.
+
+2. Non-commercial use only
+
+Commercial use is prohibited without prior written permission from the
+copyright holder (Osman Ceylan / Alka-q).
+Commercial use includes, but is not limited to:
+
+- selling or licensing the software or a modified version;
+- including the software in a paid product or service;
+- using the software to provide a paid service, hosted service, or consulting
+  service;
+- bundling the software with commercial hardware or software; and
+- using the software in an organization for a commercial purpose.
+
+3. Attribution (Mandatory Reference)
+
+Every copy, distribution, fork, derivative work, or modified version must
+clearly credit and reference the original project and copyright holder in a
+prominent and reasonable location (such as README, About dialog, and
+documentation). The attribution must include:
+
+- "EasyAltium by Osman Ceylan (Alka-q)" with a link to the original repository:
+  https://github.com/Alka-q/EasyAltium
+- Third-party engine credit for "npnp by Ref42" with a link to:
+  https://github.com/ref42/npnp
+
+Copyright notices, this license, and existing attribution notices must be
+preserved in all source distributions, binary distributions, and documentation.
+
+4. Share-alike and source availability
+
+If you distribute a modified version, you must:
+
+- make the complete corresponding source code available to recipients;
+- identify the significant changes made to the original project; and
+- distribute the modified version under this same license.
+
+If you distribute a binary version of a modified work, you must provide the
+corresponding source code and this license at no additional charge and in a
+reasonable manner.
+
+5. Contributions
+
+You may submit modifications and contributions to the original project for
+consideration. Unless a separate written agreement states otherwise, each
+contributor grants the copyright holder a perpetual, worldwide, non-exclusive,
+royalty-free license to use, reproduce, modify, publish, distribute, and
+sublicense that contribution as part of EasyAltium.
+
+6. Restrictions
+
+You may not remove or obscure attribution, copyright, or license notices. No
+trademark rights, patent rights, or other intellectual-property rights are
+granted except for the limited copyright permissions expressly stated here.
+
+7. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. Termination
+
+Any rights granted under this license terminate automatically if you violate
+these terms. Rights may be reinstated only by written permission from the
+copyright holder.

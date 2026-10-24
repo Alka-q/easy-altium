@@ -44,7 +44,7 @@ public sealed class IpcContractWriter
     {
         var sb = new StringBuilder();
         sb.AppendLine("; ============================================================================");
-        sb.AppendLine("; EasyAltium (LCSC Loader) - Host <-> Altium 26.10.1 IPC Veri Sözleşmesi");
+        sb.AppendLine("; EasyAltium (LCSC Loader) - Host <-> Altium Designer IPC Data Contract");
         sb.AppendLine("; ============================================================================");
         sb.AppendLine();
 

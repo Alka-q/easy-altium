@@ -25,9 +25,9 @@ public partial class PartPreviewPopup : Window
             : $"{part.Mpn} — {part.Manufacturer}";
 
         PackageAndStockText.Text =
-            $"Kılıf: {(string.IsNullOrWhiteSpace(part.Package) ? "-" : part.Package)} | " +
-            $"Stok: {part.Stock.ToString("N0", CultureInfo.InvariantCulture)} | " +
-            $"Fiyat: ${part.UnitPriceUsd:0.0000}";
+            $"Package: {(string.IsNullOrWhiteSpace(part.Package) ? "-" : part.Package)} | " +
+            $"Stock: {part.Stock.ToString("N0", CultureInfo.InvariantCulture)} | " +
+            $"Price: ${part.UnitPriceUsd:0.0000}";
 
         DescriptionText.Text = string.IsNullOrWhiteSpace(part.Description)
             ? $"Footprint: {part.FootprintRef}"

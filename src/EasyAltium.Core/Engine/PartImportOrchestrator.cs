@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace EasyAltium.Core.Engine;
 
 /// <summary>
-/// Tam bileşen aktarım iş akışı sonucunu temsil eder.
+/// Represents the end-to-end component import workflow result.
 /// </summary>
 public sealed record PartImportWorkflowResult(
     bool IsSuccess,
@@ -21,9 +21,10 @@ public sealed record PartImportWorkflowResult(
 );
 
 /// <summary>
-/// LCSC Meta Veri Çekme -> npnp CLI / ASCII Fallback -> Pasif Sembol Filtresi ->
-/// Mod A (MasterLib) veya Mod B (SQLite .DbLib) Kaydı -> current_part.ini Yazımı ->
-/// Altium Designer 26.10.1 CLI Tetiklemesi adımlarını uçtan uca yöneten orkestratör.
+/// Orchestrates the end-to-end pipeline:
+/// LCSC Metadata Fetch -> npnp CLI / ASCII Fallback -> 3D STEP Orientation Patch ->
+/// Passive Symbol Filter -> Mode A (MasterLib) or Mode B (SQLite .DbLib) Registration ->
+/// current_part.ini Write -> Altium Designer CLI Bridge Trigger.
 /// </summary>
 public sealed class PartImportOrchestrator
 {
@@ -79,7 +80,7 @@ public sealed class PartImportOrchestrator
         ArgumentNullException.ThrowIfNull(part);
         _config.EnsureDirectoriesExist();
 
-        progress?.Report($"[{part.LcscId}] npnp dönüştürücü çalıştırılıyor...");
+        progress?.Report($"[{part.LcscId}] Running npnp converter...");
         NpnpExportResult npnpResult = await _npnpWrapper.ExportComponentAsync(part, cancellationToken)
             .ConfigureAwait(false);
 
@@ -93,7 +94,7 @@ public sealed class PartImportOrchestrator
 
         if (!npnpResult.IsSuccess || npnpResult.RequiresFallback)
         {
-            progress?.Report($"[{part.LcscId}] npnp tamamlanamadı ({npnpResult.ErrorReason}). ASCII Fallback devreye alınıyor...");
+            progress?.Report($"[{part.LcscId}] npnp did not complete ({npnpResult.ErrorReason}). Activating ASCII Fallback...");
             AsciiFallbackResult fallback = await _fallbackHandler.PrepareFallbackDocumentsAsync(part, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -118,22 +119,22 @@ public sealed class PartImportOrchestrator
                     : Path.Combine(_config.PcbLibDirectory, $"{part.LcscId}_{safeMpn}.PcbLib");
             }
 
-            // Eğer yerel standart pasif sembol şablonu kullanılmıyorsa ve .SchLib henüz yoksa FallbackMakeLibrary tetikle
+            // Trigger FallbackMakeLibrary if not using a passive template symbol and .SchLib does not exist yet
             if (!_config.UsePassiveTemplateSymbol && !File.Exists(schLibPath) && fallback.IsSuccess)
             {
                 effectiveAction = BridgeAction.FallbackMakeLibrary;
             }
         }
 
-        // Pasif Eleman Sembol Filtresi değerlendirmesi
+        // Passive Component Symbol Filter evaluation
         PassiveSymbolMatchResult passiveMatch = _passiveFilter.Evaluate(part, _config, schLibPath);
         string dbSymbolRef = passiveMatch.IsPassiveMatched ? passiveMatch.EffectiveLibRef : part.LibRef;
         string dbSymbolPath = passiveMatch.IsPassiveMatched ? passiveMatch.EffectiveSchLibPath : schLibPath;
 
-        // Kütüphane ve Veritabanı Kaydı (Mod A veya Mod B)
+        // Library & Database Registration (Mode A or Mode B)
         if (_config.LibraryMode == LibraryMode.MasterLib)
         {
-            progress?.Report($"[{part.LcscId}] Mod A (LCSC_Master) kütüphanesine kaydediliyor...");
+            progress?.Report($"[{part.LcscId}] Registering in Mode A (LCSC_Master) library...");
             (schLibPath, pcbLibPath) = await _masterLibManager
                 .RegisterComponentInMasterLibraryAsync(part, schLibPath, pcbLibPath, cancellationToken)
                 .ConfigureAwait(false);
@@ -145,7 +146,7 @@ public sealed class PartImportOrchestrator
                 PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(pcbLibPath, part);
             }
 
-            progress?.Report($"[{part.LcscId}] Mod B (SQLite .DbLib -> {part.Category}) veritabanına UPSERT yapılıyor...");
+            progress?.Report($"[{part.LcscId}] Upserting into Mode B (SQLite .DbLib -> {part.Category}) database...");
             await _sqliteDbLibManager.UpsertComponentAsync(
                 part: part,
                 libraryRef: dbSymbolRef,
@@ -158,8 +159,8 @@ public sealed class PartImportOrchestrator
             await _dbLibGenerator.EnsureDbLibFileAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        // IPC Sözleşmesini (current_part.ini) Oluştur ve Yaz
-        progress?.Report($"[{part.LcscId}] current_part.ini veri sözleşmesi yazılıyor...");
+        // Build and write IPC Contract (current_part.ini)
+        progress?.Report($"[{part.LcscId}] Writing current_part.ini IPC contract...");
         var contract = new IpcPartContract
         {
             RequestId = Guid.NewGuid().ToString("D"),
@@ -194,15 +195,15 @@ public sealed class PartImportOrchestrator
         await _ipcWriter.WriteContractAsync(_config.IpcIniFilePath, contract, cancellationToken)
             .ConfigureAwait(false);
 
-        // Altium Designer 26.10.1 CLI Köprüsünü Tetikle
-        progress?.Report($"[{part.LcscId}] Altium Designer 26.10.1 köprüsü tetikleniyor...");
+        // Trigger Altium Designer CLI Bridge
+        progress?.Report($"[{part.LcscId}] Triggering Altium Designer bridge...");
         AltiumTriggerResult triggerResult = await _altiumTrigger
             .TriggerAltiumBridgeAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         string summary = triggerResult.IsTriggered
-            ? $"{part.LcscId} ({part.Mpn}) Altium'a gönderildi [{triggerResult.BridgeState}]."
-            : $"{part.LcscId} ({part.Mpn}) kütüphaneye ve current_part.ini'ye işlendi ({triggerResult.ErrorMessage}).";
+            ? $"{part.LcscId} ({part.Mpn}) dispatched to Altium [{triggerResult.BridgeState}]."
+            : $"{part.LcscId} ({part.Mpn}) saved to library and current_part.ini ({triggerResult.ErrorMessage}).";
 
         progress?.Report(summary);
 

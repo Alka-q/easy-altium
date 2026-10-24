@@ -36,8 +36,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Tekil örnek (Single-Instance) kontrolü: Altium Toolbar'dan "--show" ile çağrıldığında
-        // mevcut çalışan örneğin penceresini öne getirir ve ikinci süreci kapatır.
+        // Single-Instance check: when invoked with "--show" from the Altium Toolbar,
+        // brings the existing instance window to the foreground and exits the second process.
         bool createdNew;
         _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SingleInstanceEventName, out createdNew);
         if (!createdNew)
@@ -59,7 +59,7 @@ public partial class App : System.Windows.Application
         _settingsWindow.SettingsSaved += (_, _) =>
         {
             _mainViewModel.SyncFromConfig();
-            _mainViewModel.AppendLog("Yapılandırma ayarları kaydedildi.");
+            _mainViewModel.AppendLog("Configuration settings saved.");
         };
 
         _previewPopup = new PartPreviewPopup();
@@ -72,9 +72,9 @@ public partial class App : System.Windows.Application
         _miniWindow.SourceInitialized += (_, _) =>
         {
             _clipboardWatcher.AttachToWindow(_miniWindow);
-            // Ayarlar penceresinin Win32 HWND'sini başlangıçta hazırla (tıklandığında <1ms içinde anında açılsın)
+            // Pre-create the SettingsWindow Win32 HWND on startup so clicking Settings opens in <1ms
             _ = new WindowInteropHelper(_settingsWindow).EnsureHandle();
-            _mainViewModel.AppendLog("Win32 Pano Dinleyici ve Altium Toolbar ikonu hazır.");
+            _mainViewModel.AppendLog("Win32 Clipboard Watcher and Altium Toolbar icon ready.");
         };
 
         _mainViewModel.ClipboardListeningChanged += (_, enabled) =>
@@ -111,7 +111,7 @@ public partial class App : System.Windows.Application
             if (result is not null)
             {
                 _trayIcon?.ShowBalloonNotification(
-                    "EasyAltium — Aktarım Tamamlandı",
+                    "EasyAltium — Import Completed",
                     result.SummaryMessage);
             }
         };
@@ -120,7 +120,7 @@ public partial class App : System.Windows.Application
         StartDxpRcsSelfHealingMonitor();
         _miniWindow.Show();
 
-        // Arka planda ikon varlıklarını ve DXP.RCS kaydını doğrula (UI açılışını hiç bekletmeden)
+        // Verify icon assets and DXP.RCS registration in the background without delaying UI startup
         AppConfig cfg = _config;
         _ = Task.Run(() =>
         {
@@ -158,8 +158,8 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Altium Designer (X2.EXE) kapatılırken belleğindeki eski DXP.RCS içeriğini diske yazarak
-    /// yeni eklenen toolbar butonlarını ezdiğinde bunu 1.5 saniye içinde yakalayıp otomatik onarır.
+    /// Detects when Altium Designer (X2.EXE) overwrites DXP.RCS on shutdown with its cached
+    /// in-memory state and automatically restores EasyAltium's toolbar entries within 1.5 seconds.
     /// </summary>
     private void StartDxpRcsSelfHealingMonitor()
     {
@@ -180,7 +180,7 @@ public partial class App : System.Windows.Application
                     {
                         _ = Dispatcher.BeginInvoke(() =>
                         {
-                            _mainViewModel?.AppendLog("Altium kapanışı sonrası DXP.RCS toolbar kaydı otomatik korundu.");
+                            _mainViewModel?.AppendLog("DXP.RCS toolbar registration automatically preserved after Altium exit.");
                         });
                     }
                 }
@@ -206,7 +206,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            _mainViewModel.AppendLog($"Toolbar kurulum hatası: {ex.Message}");
+            _mainViewModel.AppendLog($"Toolbar installation error: {ex.Message}");
         }
     }
 
@@ -215,7 +215,7 @@ public partial class App : System.Windows.Application
         if (_mainViewModel is null || _previewPopup is null)
             return;
 
-        _mainViewModel.AppendLog($"Panodan LCSC kodu yakalandı: {lcscId}");
+        _mainViewModel.AppendLog($"LCSC code detected on clipboard: {lcscId}");
         LcscPartMetadata? metadata = await _mainViewModel.FetchPartPreviewAsync(lcscId);
         if (metadata is not null)
         {

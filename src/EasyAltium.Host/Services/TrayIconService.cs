@@ -5,7 +5,7 @@ using EasyAltium.Core.Configuration;
 namespace EasyAltium.Host.Services;
 
 /// <summary>
-/// Sistem tepsisinde (System Tray) çalışan bildirim ikonu ve sağ tık menüsü servisi.
+/// System tray notification icon and context menu service.
 /// </summary>
 public sealed class TrayIconService : IDisposable
 {
@@ -27,13 +27,13 @@ public sealed class TrayIconService : IDisposable
 
         var contextMenu = new ContextMenuStrip();
 
-        var showWindowItem = new ToolStripMenuItem("Mini Arama Penceresini Göster / Gizle")
+        var showWindowItem = new ToolStripMenuItem("Show / Hide Mini Search Window")
         {
             Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold)
         };
         showWindowItem.Click += (_, _) => ShowMiniWindowRequested?.Invoke(this, EventArgs.Empty);
 
-        _clipboardMenuItem = new ToolStripMenuItem("Pano Dinleyici Aktif (LCSC Yakala)")
+        _clipboardMenuItem = new ToolStripMenuItem("Clipboard Watcher Active (Detect LCSC)")
         {
             Checked = config.AutoWatchClipboard,
             CheckOnClick = true
@@ -41,13 +41,13 @@ public sealed class TrayIconService : IDisposable
         _clipboardMenuItem.CheckedChanged += (_, _) =>
             ClipboardListeningToggled?.Invoke(this, _clipboardMenuItem.Checked);
 
-        var installToolbarItem = new ToolStripMenuItem("Altium Üst Barına (Toolbar) İkonu Kur / Güncelle");
+        var installToolbarItem = new ToolStripMenuItem("Install / Update Altium Toolbar Icon");
         installToolbarItem.Click += (_, _) => InstallToolbarRequested?.Invoke(this, EventArgs.Empty);
 
-        var settingsItem = new ToolStripMenuItem("Yapılandırma ve Ayarlar...");
+        var settingsItem = new ToolStripMenuItem("Configuration & Settings...");
         settingsItem.Click += (_, _) => OpenSettingsRequested?.Invoke(this, EventArgs.Empty);
 
-        var exitItem = new ToolStripMenuItem("EasyAltium'dan Çık");
+        var exitItem = new ToolStripMenuItem("Exit EasyAltium");
         exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
         contextMenu.Items.Add(showWindowItem);

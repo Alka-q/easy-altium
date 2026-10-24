@@ -1,7 +1,7 @@
 <Window x:Class="EasyAltium.Host.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EasyAltium — Yapılandırma ve Ayarlar"
+        Title="EasyAltium — Configuration &amp; Settings"
         Width="560"
         Height="490"
         WindowStartupLocation="CenterOwner"
@@ -18,7 +18,7 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Text="EasyAltium Sistem &amp; Altium Designer Köprü Ayarları"
+                   Text="EasyAltium System &amp; Altium Designer Bridge Settings"
                    FontSize="15"
                    FontWeight="Bold"
                    Foreground="#F59E0B"
@@ -26,7 +26,7 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="Altium Designer Yürütülebilir Dosya Yolu (X2.EXE — Sürümden Bağımsız):"
+                <TextBlock Text="Altium Designer Executable Path (X2.EXE — Version-Agnostic):"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,4,0,4" />
@@ -36,7 +36,7 @@
                          BorderBrush="#374151"
                          Padding="8,5" />
 
-                <TextBlock Text="DelphiScript Köprü Projesi (LCSC_Bridge.PrjScr):"
+                <TextBlock Text="DelphiScript Bridge Project (LCSC_Bridge.PrjScr):"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,10,0,4" />
@@ -46,7 +46,7 @@
                          BorderBrush="#374151"
                          Padding="8,5" />
 
-                <TextBlock Text="Rust npnp CLI Yürütülebilir Dosya Yolu / Komutu:"
+                <TextBlock Text="Rust npnp CLI Executable Path / Command:"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,10,0,4" />
@@ -56,7 +56,7 @@
                          BorderBrush="#374151"
                          Padding="8,5" />
 
-                <TextBlock Text="npnp CLI Argüman Şablonu ({LCSC_ID}, {OUTPUT_DIR}):"
+                <TextBlock Text="npnp CLI Arguments Template ({LCSC_ID}, {OUTPUT_DIR}):"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,10,0,4" />
@@ -66,7 +66,7 @@
                          BorderBrush="#374151"
                          Padding="8,5" />
 
-                <TextBlock Text="Yerel Kütüphane Kök Dizini (./Library):"
+                <TextBlock Text="Local Library Root Directory (./Library):"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,10,0,4" />
@@ -76,7 +76,7 @@
                          BorderBrush="#374151"
                          Padding="8,5" />
 
-                <TextBlock Text="Pasif Eleman Standart Sembol Şablonu (.SchLib):"
+                <TextBlock Text="Passive Component Standard Symbol Template (.SchLib):"
                            FontSize="12"
                            Foreground="#D1D5DB"
                            Margin="0,10,0,4" />
@@ -88,11 +88,11 @@
 
                 <StackPanel Margin="0,12,0,0">
                     <CheckBox x:Name="InteractivePlacementCheck"
-                              Content="Şematikte fare imlecine bağlayarak yerleştir (InteractiveCursor)"
+                              Content="Attach component to mouse cursor on schematic (InteractiveCursor)"
                               Foreground="#D1D5DB"
                               Margin="0,4" />
                     <CheckBox x:Name="OpenLibIfNoSchCheck"
-                              Content="Aktif şematik (.SchDoc) açık değilse .SchLib dosyasını Altium'da aç"
+                              Content="Open .SchLib in Altium if no active schematic (.SchDoc) is open"
                               Foreground="#D1D5DB"
                               Margin="0,4" />
                 </StackPanel>
@@ -107,7 +107,7 @@
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="0"
-                    Content="Altium Üst Barına (Toolbar) İkonu Kur / Güncelle"
+                    Content="Install / Update Altium Toolbar Icon"
                     Click="InstallToolbarButton_OnClick"
                     Background="#2563EB"
                     Foreground="#F9FAFB"
@@ -119,7 +119,7 @@
             <StackPanel Grid.Column="2"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right">
-                <Button Content="İptal"
+                <Button Content="Cancel"
                         Click="CancelButton_OnClick"
                         Background="#262B36"
                         Foreground="#E5E7EB"
@@ -127,7 +127,7 @@
                         Padding="16,6"
                         Margin="0,0,8,0"
                         Cursor="Hand" />
-                <Button Content="Kaydet"
+                <Button Content="Save"
                         Click="SaveButton_OnClick"
                         Background="#F59E0B"
                         Foreground="#111318"

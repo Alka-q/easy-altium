@@ -26,7 +26,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Üst Başlık ve Hızlı Kontroller -->
+        <!-- Header & Quick Controls -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -64,12 +64,12 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <CheckBox Content="Üstte Tut"
+                <CheckBox Content="Always on Top"
                           IsChecked="{Binding AlwaysOnTop}"
                           Foreground="#D1D5DB"
                           VerticalAlignment="Center"
                           Margin="0,0,10,0" />
-                <Button Content="Ayarlar"
+                <Button Content="Settings"
                         Command="{Binding OpenSettingsCommand}"
                         Background="#262B36"
                         Foreground="#E5E7EB"
@@ -79,7 +79,7 @@
             </StackPanel>
         </Grid>
 
-        <!-- Arama Çubuğu ve Pano Dinleyici -->
+        <!-- Search Bar & Clipboard Watcher -->
         <Border Grid.Row="1"
                 Background="#1E222B"
                 BorderBrush="#2E3440"
@@ -107,7 +107,7 @@
                              KeyDown="SearchBox_OnKeyDown" />
 
                     <Button Grid.Column="1"
-                            Content="LCSC Sorgula"
+                            Content="Fetch LCSC"
                             Command="{Binding FetchPartCommand}"
                             Background="#F59E0B"
                             Foreground="#111318"
@@ -119,15 +119,15 @@
                 </Grid>
 
                 <WrapPanel Margin="0,8,0,0">
-                    <CheckBox Content="Pano Dinleyici (^C[1-9]\d{2,}$) Aktif"
+                    <CheckBox Content="Clipboard Watcher (^C[1-9]\d{2,}$)"
                               IsChecked="{Binding IsClipboardListening}"
                               Foreground="#D1D5DB"
                               Margin="0,0,14,4" />
-                    <CheckBox Content="Mod B: SQLite .DbLib"
+                    <CheckBox Content="Mode B: SQLite .DbLib"
                               IsChecked="{Binding IsSqliteMode}"
                               Foreground="#D1D5DB"
                               Margin="0,0,14,4" />
-                    <CheckBox Content="Pasiflerde Standart Sembol (R/C/L)"
+                    <CheckBox Content="Standard Symbol for Passives (R/C/L)"
                               IsChecked="{Binding UsePassiveTemplateSymbol}"
                               Foreground="#D1D5DB"
                               Margin="0,0,0,4" />
@@ -135,7 +135,7 @@
             </StackPanel>
         </Border>
 
-        <!-- Parça Meta Veri Önizleme Kartı -->
+        <!-- Part Metadata Preview Card -->
         <Border Grid.Row="2"
                 Background="#1E222B"
                 BorderBrush="#2E3440"
@@ -197,25 +197,25 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2">
-                        <Run Text="Üretici: " Foreground="#6B7280" />
+                        <Run Text="Brand: " Foreground="#6B7280" />
                         <Run Text="{Binding PartManufacturerDisplay, Mode=OneWay}" Foreground="#E5E7EB" FontWeight="SemiBold" />
                     </TextBlock>
                     <TextBlock Grid.Row="0" Grid.Column="1" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2">
-                        <Run Text="Kılıf: " Foreground="#6B7280" />
+                        <Run Text="Package: " Foreground="#6B7280" />
                         <Run Text="{Binding PartPackageDisplay, Mode=OneWay}" Foreground="#E5E7EB" FontWeight="SemiBold" />
                     </TextBlock>
 
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2">
-                        <Run Text="Stok: " Foreground="#6B7280" />
+                        <Run Text="Stock: " Foreground="#6B7280" />
                         <Run Text="{Binding PartStockDisplay, Mode=OneWay}" Foreground="#10B981" FontWeight="Bold" />
                     </TextBlock>
                     <TextBlock Grid.Row="1" Grid.Column="1" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2">
-                        <Run Text="Fiyat: " Foreground="#6B7280" />
+                        <Run Text="Price: " Foreground="#6B7280" />
                         <Run Text="{Binding PartPriceDisplay, Mode=OneWay}" Foreground="#FBBF24" FontWeight="Bold" />
                     </TextBlock>
 
                     <TextBlock Grid.Row="2" Grid.Column="0" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2">
-                        <Run Text="Kategori: " Foreground="#6B7280" />
+                        <Run Text="Category: " Foreground="#6B7280" />
                         <Run Text="{Binding PartCategoryDisplay, Mode=OneWay}" Foreground="#D1D5DB" />
                     </TextBlock>
                     <TextBlock Grid.Row="2" Grid.Column="1" FontSize="11.5" Foreground="#9CA3AF" Margin="0,2" TextTrimming="CharacterEllipsis">
@@ -234,7 +234,7 @@
             </Grid>
         </Border>
 
-        <!-- Altium Aktarım Aksiyon Butonları -->
+        <!-- Altium Import & Placement Action Buttons -->
         <Grid Grid.Row="3" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.4*" />
@@ -242,7 +242,7 @@
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="0"
-                    Content="Altium'a Aktar &amp; Yerleştir"
+                    Content="Import &amp; Place in Altium"
                     Command="{Binding PlaceInAltiumCommand}"
                     Background="#10B981"
                     Foreground="#06281E"
@@ -254,7 +254,7 @@
                     Cursor="Hand" />
 
             <Button Grid.Column="1"
-                    Content="Sadece Kütüphaneye Yükle"
+                    Content="Add to Library Only"
                     Command="{Binding LoadLibraryOnlyCommand}"
                     Background="#262B36"
                     Foreground="#F3F4F6"
@@ -264,7 +264,7 @@
                     Cursor="Hand" />
         </Grid>
 
-        <!-- Canlı İşlem Günlüğü -->
+        <!-- Live Activity Log -->
         <Border Grid.Row="4"
                 Background="#111318"
                 BorderBrush="#262B36"
@@ -279,7 +279,7 @@
                      FontSize="11" />
         </Border>
 
-        <!-- Alt Durum Çubuğu -->
+        <!-- Bottom Status Bar -->
         <TextBlock Grid.Row="5"
                    Text="{Binding StatusMessage}"
                    FontSize="11"

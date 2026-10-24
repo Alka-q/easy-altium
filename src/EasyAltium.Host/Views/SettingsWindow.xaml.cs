@@ -51,7 +51,7 @@ public partial class SettingsWindow : Window
             System.Windows.MessageBox.Show(
                 this,
                 res.Message,
-                res.IsSuccess ? "EasyAltium Toolbar Kurulumu" : "Uyarı",
+                res.IsSuccess ? "EasyAltium Toolbar Installation" : "Warning",
                 MessageBoxButton.OK,
                 res.IsSuccess ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
@@ -59,8 +59,8 @@ public partial class SettingsWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                $"Toolbar kurulumu sırasında hata oluştu: {ex.Message}",
-                "Hata",
+                $"Error while installing toolbar icon: {ex.Message}",
+                "Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
