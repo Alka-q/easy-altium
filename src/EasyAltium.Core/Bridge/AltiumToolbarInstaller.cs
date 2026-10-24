@@ -29,6 +29,7 @@ public sealed class AltiumToolbarInstaller
 
     public string ToolbarAssetsDirectory => Path.Combine(_config.WorkspaceRoot, "altium-bridge", "assets");
     public string ToolbarPngIconPath => Path.Combine(ToolbarAssetsDirectory, "EasyAltium.png");
+    public string ToolbarHiDpiPngIconPath => Path.Combine(ToolbarAssetsDirectory, "EasyAltium_x2.png");
     public string ToolbarSmallPngIconPath => Path.Combine(ToolbarAssetsDirectory, "EasyAltium_16.png");
     public string AppIcoPath => Path.Combine(ToolbarAssetsDirectory, "EasyAltium.ico");
     public string SourceJfifPath => Path.Combine(_config.WorkspaceRoot, "doc", "EasyAltium-componentimge.jfif");
@@ -57,7 +58,61 @@ public sealed class AltiumToolbarInstaller
     }
 
     /// <summary>
-    /// Tüm Altium Designer profillerindeki DXP.RCS dosyalarına üst panel barı (Toolbar)
+    /// Altium Designer kapanırken belleğindeki eski DXP.RCS dosyasını diske yazarak
+    /// EasyAltium toolbar kayıtlarını ezdiyse bunu tespit eder ve anında onarır.
+    /// </summary>
+    public bool EnsureToolbarInstalledIfNeeded()
+    {
+        var profiles = DiscoverAltiumProfileDirectories();
+        if (profiles.Count == 0)
+            return false;
+
+        string expectedProjectPath = Path.GetFullPath(_config.BridgeScriptProjectPath);
+        bool anyRepaired = false;
+
+        foreach (string profileDir in profiles)
+        {
+            string rcsPath = Path.Combine(profileDir, "DXP.RCS");
+            if (!File.Exists(rcsPath))
+            {
+                anyRepaired = true;
+                break;
+            }
+
+            try
+            {
+                string content = File.ReadAllText(rcsPath, Encoding.UTF8);
+                if (!content.Contains("_UserEasyAltiumActiveSch", StringComparison.OrdinalIgnoreCase) ||
+                    !content.Contains(expectedProjectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    anyRepaired = true;
+                    break;
+                }
+            }
+            catch
+            {
+                // Dosya o an Altium tarafından yazılıyorsa bir sonraki döngüde kontrol edilir
+            }
+        }
+
+        if (anyRepaired)
+        {
+            try
+            {
+                InstallToolbarAndMenus();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tüm Altium Designer profillerindeki DXP.RCS dosyalarına üst panel barı (Active Bar + Toolbar)
     /// ve menü butonlarını kurar.
     /// </summary>
     public ToolbarInstallResult InstallToolbarAndMenus()
@@ -73,9 +128,7 @@ public sealed class AltiumToolbarInstaller
         }
 
         string projectPath = Path.GetFullPath(_config.BridgeScriptProjectPath);
-        string iconPath = File.Exists(ToolbarSmallPngIconPath)
-            ? Path.GetFullPath(ToolbarSmallPngIconPath)
-            : Path.GetFullPath(ToolbarPngIconPath);
+        string iconPath = Path.GetFullPath(ToolbarPngIconPath);
 
         var updatedProfiles = new List<string>();
 
@@ -102,7 +155,7 @@ public sealed class AltiumToolbarInstaller
             IsSuccess: true,
             UpdatedProfileDirectories: updatedProfiles,
             ToolbarIconPath: iconPath,
-            Message: $"EasyAltium üst araç çubuğu (Toolbar) ikonu {updatedProfiles.Count} Altium profiline kuruldu. (Değişikliğin görünmesi için Altium açıksa yeniden başlatın).");
+            Message: $"EasyAltium üst araç çubuğu (Active Bar & Toolbar) ikonu {updatedProfiles.Count} Altium profiline kuruldu.");
     }
 
     public static string BuildUpdatedDxpRcsContent(
@@ -156,18 +209,33 @@ public sealed class AltiumToolbarInstaller
         sb.AppendLine(
             $"PL EasyAltium Command='ScriptingSystem:RunScript' " +
             $"Params='ProjectName={bridgeProjectFullPath}|ProcName=Bridge.pas>LaunchOrShowEasyAltium' " +
-            $"Caption='EasyAltium - LCSC Loader' " +
-            $"Hint='EasyAltium LCSC & JLCPCB Library Loader Penceresini Aç' " +
+            $"Caption='EasyAltium - LCSC' " +
+            $"Description='EasyAltium LCSC & JLCPCB Library Loader Penceresini Aç' " +
+            $"Hint='EasyAltium LCSC & JLCPCB Library Loader' " +
             $"Image='{iconFullPath}' DefaultChecked=0  End");
 
         sb.AppendLine(
             $"PL EasyAltiumPlace Command='ScriptingSystem:RunScript' " +
             $"Params='ProjectName={bridgeProjectFullPath}|ProcName=Bridge.pas>PlaceOrLoadComponent' " +
             $"Caption='EasyAltium - Son Parçayı Yerleştir' " +
-            $"Hint='Son indirilen LCSC bileşenini doğrudan imlece al' " +
+            $"Description='Son indirilen LCSC bileşenini doğrudan imlece al' " +
+            $"Hint='EasyAltium - Son Parçayı Yerleştir' " +
             $"Image='{iconFullPath}' DefaultChecked=0  End");
 
-        // 2. Şematik Üst Araç Çubukları (Top Toolbars: Wiring & Schematic Standard)
+        // 2. Modern Altium Üst Active Bar (TopBarSchematic, TopBarPCB, TopBarSchLib) — Doğrudan Çip İkonu Gösterir
+        sb.AppendLine("Insertion _UserEasyAltiumActiveSch TargetID='TopBarSchematic' InsertType='After' RefID0='TopBarSchematic010'");
+        sb.AppendLine("    Link _UserEasyAltiumActiveSchLink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltiumActivePcb TargetID='TopBarPCB' InsertType='After' RefID0='TopBarPCB010'");
+        sb.AppendLine("    Link _UserEasyAltiumActivePcbLink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltiumActiveSchLib TargetID='TopBarSchLib' InsertType='After' RefID0='TopBarSchLib180'");
+        sb.AppendLine("    Link _UserEasyAltiumActiveSchLibLink PLID='EasyAltium'   End");
+        sb.AppendLine("End");
+
+        // 3. Klasik Şematik ve PCB Üst Araç Çubukları (Top Toolbars: Wiring, Schematic Standard, PCB Standard)
         sb.AppendLine("Insertion _UserEasyAltiumTB1 TargetID='TLWiringTools' InsertType='After' RefID0='TBSchematic_ToolsWiring090'");
         sb.AppendLine("    Link _UserEasyAltiumTB2 PLID='EasyAltium'      End");
         sb.AppendLine("End");
@@ -176,12 +244,11 @@ public sealed class AltiumToolbarInstaller
         sb.AppendLine("    Link _UserEasyAltiumTB4 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        // 3. PCB Üst Araç Çubuğu (Top Toolbar: PCB Standard)
         sb.AppendLine("Insertion _UserEasyAltiumTB5 TargetID='TLPCBToolbar' InsertType='After' RefID0='TBPCB_StandardToolbar780'");
         sb.AppendLine("    Link _UserEasyAltiumTB6 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        // 4. Şematik ve PCB Üst Menü Barı + Tools Menüsü
+        // 4. Üst Menü Barları (Şematik, PCB, Home/Engagement, Boş Pencere) + Tools Menüsü
         sb.AppendLine("Insertion _UserEasyAltium1 TargetID='MNSchematicMenu' InsertType='After' RefID0='MNSchematic_Help10'");
         sb.AppendLine("    Link _UserEasyAltium2 PLID='EasyAltium'      End");
         sb.AppendLine("End");
@@ -197,6 +264,14 @@ public sealed class AltiumToolbarInstaller
 
         sb.AppendLine("Insertion _UserEasyAltium7 TargetID='MNPCB_Tools10' RefID0='PcbDoc_Tools'");
         sb.AppendLine("    Link _UserEasyAltium8 PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltium9 TargetID='MNEngagementMenu' InsertType='After' RefID0='MNEngagementHelpMenu'");
+        sb.AppendLine("    Link _UserEasyAltium10 PLID='EasyAltium'     End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltium11 TargetID='MNNoDocument' InsertType='After' RefID0='MNNoDocument_Help'");
+        sb.AppendLine("    Link _UserEasyAltium12 PLID='EasyAltium'     End");
         sb.AppendLine("End");
 
         return sb.ToString();

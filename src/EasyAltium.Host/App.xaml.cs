@@ -107,6 +107,7 @@ public partial class App : System.Windows.Application
         };
 
         StartSingleInstanceListener();
+        StartDxpRcsSelfHealingMonitor();
         _miniWindow.Show();
     }
 
@@ -126,6 +127,40 @@ public partial class App : System.Windows.Application
                 if (signaled == 0 && !token.IsCancellationRequested)
                 {
                     Dispatcher.BeginInvoke(ShowAndActivateMiniWindow);
+                }
+            }
+        }, token);
+    }
+
+    /// <summary>
+    /// Altium Designer (X2.EXE) kapatılırken belleğindeki eski DXP.RCS içeriğini diske yazarak
+    /// yeni eklenen toolbar butonlarını ezdiğinde bunu 1.5 saniye içinde yakalayıp otomatik onarır.
+    /// </summary>
+    private void StartDxpRcsSelfHealingMonitor()
+    {
+        if (_config is null || _ipcListenCts is null)
+            return;
+
+        CancellationToken token = _ipcListenCts.Token;
+        var installer = new AltiumToolbarInstaller(_config);
+
+        _ = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1500));
+            while (!token.IsCancellationRequested && await timer.WaitForNextTickAsync(token).ConfigureAwait(false))
+            {
+                try
+                {
+                    if (installer.EnsureToolbarInstalledIfNeeded())
+                    {
+                        _ = Dispatcher.BeginInvoke(() =>
+                        {
+                            _mainViewModel?.AppendLog("Altium kapanışı sonrası DXP.RCS toolbar kaydı otomatik korundu.");
+                        });
+                    }
+                }
+                catch
+                {
                 }
             }
         }, token);

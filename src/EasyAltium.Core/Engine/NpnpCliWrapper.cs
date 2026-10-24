@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using EasyAltium.Core.Configuration;
 using EasyAltium.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -160,6 +162,9 @@ public sealed class NpnpCliWrapper
                     ErrorReason: $"npnp çıkış kodu {process.ExitCode}: {stdErr.Trim()}");
             }
 
+            // 3D STEP modelini de indir (npnp model <LCSC_ID> -o "<stagingDir>" --force)
+            await TryExportStepModelAsync(part.LcscId, stagingDir, cancellationToken).ConfigureAwait(false);
+
             // Üretilen .SchLib, .PcbLib ve .step dosyalarını hedef dizinlere taşı
             return OrganizeExportedFiles(part, stagingDir, stdOut, stdErr);
         }
@@ -207,10 +212,20 @@ public sealed class NpnpCliWrapper
         string targetStep = Path.Combine(_config.StepDirectory, $"{part.LcscId}_{safeMpn}.step");
 
         if (schFiles.Length > 0)
+        {
             File.Copy(schFiles[0], targetSchLib, overwrite: true);
+            string? extractedLibRef = TryExtractLibRefFromSchLib(targetSchLib, part.LcscId);
+            if (!string.IsNullOrWhiteSpace(extractedLibRef))
+                part.LibRef = extractedLibRef;
+        }
 
         if (pcbFiles.Length > 0)
+        {
             File.Copy(pcbFiles[0], targetPcbLib, overwrite: true);
+            string? extractedFootprint = TryExtractFootprintName(targetSchLib, targetPcbLib, part.LcscId);
+            if (!string.IsNullOrWhiteSpace(extractedFootprint))
+                part.FootprintRef = extractedFootprint;
+        }
 
         string resolvedStepPath = string.Empty;
         if (stepFiles.Length > 0)
@@ -228,6 +243,106 @@ public sealed class NpnpCliWrapper
             ExitCode: 0,
             StandardOutput: stdOut,
             StandardError: stdErr);
+    }
+
+    private async Task TryExportStepModelAsync(
+        string lcscId,
+        string stagingDir,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = _config.NpnpExecutablePath,
+                Arguments = $"model {lcscId} -o \"{stagingDir}\" --force",
+                WorkingDirectory = stagingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc is null)
+                return;
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(20));
+            await proc.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            // STEP modeli opsiyoneldir
+        }
+    }
+
+    private static string? TryExtractLibRefFromSchLib(string schLibPath, string lcscId)
+    {
+        try
+        {
+            if (!File.Exists(schLibPath))
+                return null;
+
+            byte[] bytes = File.ReadAllBytes(schLibPath);
+            string latin1 = Encoding.Latin1.GetString(bytes);
+
+            var utf8Matches = Regex.Matches(latin1, @"\|%UTF8%LIBREF\d+=([^|\x00]+)");
+            if (utf8Matches.Count > 0)
+            {
+                string raw = utf8Matches[^1].Groups[1].Value;
+                byte[] utf8Bytes = Encoding.Latin1.GetBytes(raw);
+                return Encoding.UTF8.GetString(utf8Bytes).Trim();
+            }
+
+            var plainMatches = Regex.Matches(latin1, @"\|LIBREF\d+=([^|\x00]+)");
+            if (plainMatches.Count > 0)
+            {
+                return WebUtility.HtmlDecode(plainMatches[^1].Groups[1].Value).Trim();
+            }
+
+            string fileNameNoExt = Path.GetFileNameWithoutExtension(schLibPath);
+            if (fileNameNoExt.Contains($"__{lcscId}", StringComparison.OrdinalIgnoreCase))
+                return fileNameNoExt;
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    private static string? TryExtractFootprintName(string schLibPath, string pcbLibPath, string lcscId)
+    {
+        try
+        {
+            foreach ((string path, string key) in new[] { (schLibPath, "MODELNAME"), (pcbLibPath, "PATTERN") })
+            {
+                if (!File.Exists(path))
+                    continue;
+
+                byte[] bytes = File.ReadAllBytes(path);
+                string latin1 = Encoding.Latin1.GetString(bytes);
+
+                var utf8Matches = Regex.Matches(latin1, $@"%UTF8%{key}=([^|\x00]*__{Regex.Escape(lcscId)})", RegexOptions.IgnoreCase);
+                if (utf8Matches.Count > 0)
+                {
+                    byte[] utf8Bytes = Encoding.Latin1.GetBytes(utf8Matches[^1].Groups[1].Value);
+                    return Encoding.UTF8.GetString(utf8Bytes).Trim();
+                }
+
+                var plainMatches = Regex.Matches(latin1, $@"\|{key}=([^|\x00]*__{Regex.Escape(lcscId)})", RegexOptions.IgnoreCase);
+                if (plainMatches.Count > 0)
+                {
+                    return WebUtility.HtmlDecode(plainMatches[^1].Groups[1].Value).Trim();
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
     }
 
     private static void TryKillProcess(Process process)

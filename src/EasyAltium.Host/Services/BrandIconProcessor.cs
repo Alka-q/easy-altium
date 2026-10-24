@@ -29,11 +29,19 @@ public static partial class BrandIconProcessor
 
         using Bitmap transparentChip = LoadAndExtractTransparentChipBitmap(installer.SourceJfifPath);
 
-        using Bitmap icon32 = ResizeBitmapHighQuality(transparentChip, 32, 32);
-        icon32.Save(installer.ToolbarPngIconPath, ImageFormat.Png);
-
         using Bitmap icon16 = ResizeBitmapHighQuality(transparentChip, 16, 16);
+        using Bitmap icon32 = ResizeBitmapHighQuality(transparentChip, 32, 32);
+
+        // Altium standart buton boyutu 16x16 (EasyAltium.png) ve High-DPI 2x boyutu 32x32 (EasyAltium_x2.png)
+        icon16.Save(installer.ToolbarPngIconPath, ImageFormat.Png);
+        icon32.Save(installer.ToolbarHiDpiPngIconPath, ImageFormat.Png);
+
         icon16.Save(installer.ToolbarSmallPngIconPath, ImageFormat.Png);
+        string smallHiDpiPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium_16_x2.png");
+        icon32.Save(smallHiDpiPath, ImageFormat.Png);
+
+        string largePngPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium_32.png");
+        icon32.Save(largePngPath, ImageFormat.Png);
 
         string bmpPath = Path.Combine(installer.ToolbarAssetsDirectory, "EasyAltium.bmp");
         icon16.Save(bmpPath, ImageFormat.Bmp);

@@ -58,7 +58,7 @@ public sealed class AppConfig
     /// <summary>
     /// npnp CLI argüman şablonu ({LCSC_ID} ve {OUTPUT_DIR} yer tutucularını destekler).
     /// </summary>
-    public string NpnpArgumentsTemplate { get; set; } = "altium export {LCSC_ID} --full --output \"{OUTPUT_DIR}\"";
+    public string NpnpArgumentsTemplate { get; set; } = "altium {LCSC_ID} -o \"{OUTPUT_DIR}\" --force --language en";
 
     /// <summary>
     /// Kütüphane yönetim modu: Mod A (MasterLib) veya Mod B (SqliteDbLib).
@@ -174,10 +174,17 @@ public sealed class AppConfig
         if (string.IsNullOrWhiteSpace(PassiveTemplateSchLibPath))
             PassiveTemplateSchLibPath = Path.Combine(WorkspaceRoot, "altium-bridge", "Templates", "Standard_Passives.SchLib");
 
-        if (string.IsNullOrWhiteSpace(NpnpExecutablePath))
+        string localNpnp = Path.Combine(WorkspaceRoot, "tools", "npnp", "npnp.exe");
+        if (string.IsNullOrWhiteSpace(NpnpExecutablePath) ||
+            (string.Equals(NpnpExecutablePath, "npnp", StringComparison.OrdinalIgnoreCase) && File.Exists(localNpnp)))
         {
-            string localNpnp = Path.Combine(WorkspaceRoot, "tools", "npnp", "npnp.exe");
             NpnpExecutablePath = File.Exists(localNpnp) ? localNpnp : "npnp";
+        }
+
+        if (string.IsNullOrWhiteSpace(NpnpArgumentsTemplate) ||
+            NpnpArgumentsTemplate.StartsWith("altium export ", StringComparison.OrdinalIgnoreCase))
+        {
+            NpnpArgumentsTemplate = "altium {LCSC_ID} -o \"{OUTPUT_DIR}\" --force --language en";
         }
 
         if (!File.Exists(AltiumExecutablePath))
