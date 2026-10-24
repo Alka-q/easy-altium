@@ -34,12 +34,16 @@ public sealed class PassiveSymbolFilter
         ArgumentNullException.ThrowIfNull(part);
         ArgumentNullException.ThrowIfNull(config);
 
+        string defaultLibRef = !string.IsNullOrWhiteSpace(part.LibRef)
+            ? part.LibRef
+            : (!string.IsNullOrWhiteSpace(part.Mpn) ? part.Mpn : part.LcscId);
+
         if (!config.UsePassiveTemplateSymbol || part.PartCount > 1)
         {
             return new PassiveSymbolMatchResult(
                 IsPassiveMatched: false,
                 EffectiveSchLibPath: defaultSchLibPath,
-                EffectiveLibRef: part.LibRef,
+                EffectiveLibRef: defaultLibRef,
                 PassiveTemplateLibRef: null);
         }
 
@@ -49,7 +53,7 @@ public sealed class PassiveSymbolFilter
             return new PassiveSymbolMatchResult(
                 IsPassiveMatched: false,
                 EffectiveSchLibPath: defaultSchLibPath,
-                EffectiveLibRef: part.LibRef,
+                EffectiveLibRef: defaultLibRef,
                 PassiveTemplateLibRef: null);
         }
 
