@@ -67,7 +67,7 @@ public sealed class AltiumToolbarInstaller
         if (profiles.Count == 0)
             return false;
 
-        string expectedProjectPath = Path.GetFullPath(_config.BridgeScriptProjectPath);
+        string expectedProjectPath = NormalizePathDriveLetter(Path.GetFullPath(_config.BridgeScriptProjectPath));
         bool anyRepaired = false;
 
         foreach (string profileDir in profiles)
@@ -82,7 +82,8 @@ public sealed class AltiumToolbarInstaller
             try
             {
                 string content = File.ReadAllText(rcsPath, Encoding.UTF8);
-                if (!content.Contains("_UserEasyAltiumActiveSch", StringComparison.OrdinalIgnoreCase) ||
+                if (content.Contains("Hint=", StringComparison.OrdinalIgnoreCase) ||
+                    !content.Contains("_UserEasyAltiumDXP", StringComparison.OrdinalIgnoreCase) ||
                     !content.Contains(expectedProjectPath, StringComparison.OrdinalIgnoreCase))
                 {
                     anyRepaired = true;
@@ -127,8 +128,8 @@ public sealed class AltiumToolbarInstaller
                 Message: "%APPDATA%\\Altium altında Altium Designer kullanıcı profili bulunamadı.");
         }
 
-        string projectPath = Path.GetFullPath(_config.BridgeScriptProjectPath);
-        string iconPath = Path.GetFullPath(ToolbarPngIconPath);
+        string projectPath = NormalizePathDriveLetter(Path.GetFullPath(_config.BridgeScriptProjectPath));
+        string iconPath = NormalizePathDriveLetter(Path.GetFullPath(ToolbarPngIconPath));
 
         var updatedProfiles = new List<string>();
 
@@ -205,75 +206,96 @@ public sealed class AltiumToolbarInstaller
         foreach (string line in preservedLines)
             sb.AppendLine(line);
 
+        string cleanProjectPath = NormalizePathDriveLetter(bridgeProjectFullPath);
+        string cleanIconPath = NormalizePathDriveLetter(iconFullPath);
+
         // 1. Komut Tanımları (PL EasyAltium & PL EasyAltiumPlace)
+        // ÖNEMLİ: X2.EXE içerisindeki TProcessLauncher .RCS ayrıştırıcısı yalnızca
+        // Command, Params, Caption, Image, Description, DefaultChecked özniteliklerini kabul eder.
+        // 'Hint' özniteliği veya ASCII dışı karakterler tüm DXP.RCS dosyasının reddedilmesine yol açar.
         sb.AppendLine(
             $"PL EasyAltium Command='ScriptingSystem:RunScript' " +
-            $"Params='ProjectName={bridgeProjectFullPath}|ProcName=Bridge.pas>LaunchOrShowEasyAltium' " +
+            $"Params='ProjectName={cleanProjectPath}|ProcName=Bridge.pas>LaunchOrShowEasyAltium' " +
             $"Caption='EasyAltium - LCSC' " +
-            $"Description='EasyAltium LCSC & JLCPCB Library Loader Penceresini Aç' " +
-            $"Hint='EasyAltium LCSC & JLCPCB Library Loader' " +
-            $"Image='{iconFullPath}' DefaultChecked=0  End");
+            $"Image='{cleanIconPath}' DefaultChecked=0  End");
 
         sb.AppendLine(
             $"PL EasyAltiumPlace Command='ScriptingSystem:RunScript' " +
-            $"Params='ProjectName={bridgeProjectFullPath}|ProcName=Bridge.pas>PlaceOrLoadComponent' " +
-            $"Caption='EasyAltium - Son Parçayı Yerleştir' " +
-            $"Description='Son indirilen LCSC bileşenini doğrudan imlece al' " +
-            $"Hint='EasyAltium - Son Parçayı Yerleştir' " +
-            $"Image='{iconFullPath}' DefaultChecked=0  End");
+            $"Params='ProjectName={cleanProjectPath}|ProcName=Bridge.pas>PlaceOrLoadComponent' " +
+            $"Caption='EasyAltium - Place Last Part' " +
+            $"Image='{cleanIconPath}' DefaultChecked=0  End");
 
-        // 2. Modern Altium Üst Active Bar (TopBarSchematic, TopBarPCB, TopBarSchLib) — Doğrudan Çip İkonu Gösterir
-        sb.AppendLine("Insertion _UserEasyAltiumActiveSch TargetID='TopBarSchematic' InsertType='After' RefID0='TopBarSchematic010'");
+        // 2. Üst Sol Başlık Çubuğu (Quick Access Bar: Save / Open / Undo / Redo yanına çip ikonu)
+        sb.AppendLine("Insertion _UserEasyAltiumQA TargetID='DXPQuickAccessBar' InsertType='After' RefID0='DXPQuickAccessBar090' ");
+        sb.AppendLine("    Link _UserEasyAltiumQALink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        // 3. Üst Sağ Sistem İkon Çubuğu (DXPToolbar: Home ve Ayarlar çark ikonu yanına çip ikonu)
+        sb.AppendLine("Insertion _UserEasyAltiumDXP TargetID='DXPToolbar' InsertType='Before' RefID0='DXPToolbar030' ");
+        sb.AppendLine("    Link _UserEasyAltiumDXPLink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        // 4. Modern Altium Üst Orta Active Bar (TopBarSchematic & TopBarPCB: Place Part / Components yanına çip ikonu)
+        sb.AppendLine("Insertion _UserEasyAltiumActiveSch TargetID='TopBarSchematic' InsertType='After' RefID0='TopBarSchematic010' ");
         sb.AppendLine("    Link _UserEasyAltiumActiveSchLink PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltiumActivePcb TargetID='TopBarPCB' InsertType='After' RefID0='TopBarPCB010'");
+        sb.AppendLine("Insertion _UserEasyAltiumActivePcb TargetID='TopBarPCB' InsertType='After' RefID0='TopBarPCB010' ");
         sb.AppendLine("    Link _UserEasyAltiumActivePcbLink PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltiumActiveSchLib TargetID='TopBarSchLib' InsertType='After' RefID0='TopBarSchLib180'");
-        sb.AppendLine("    Link _UserEasyAltiumActiveSchLibLink PLID='EasyAltium'   End");
-        sb.AppendLine("End");
-
-        // 3. Klasik Şematik ve PCB Üst Araç Çubukları (Top Toolbars: Wiring, Schematic Standard, PCB Standard)
-        sb.AppendLine("Insertion _UserEasyAltiumTB1 TargetID='TLWiringTools' InsertType='After' RefID0='TBSchematic_ToolsWiring090'");
-        sb.AppendLine("    Link _UserEasyAltiumTB2 PLID='EasyAltium'      End");
-        sb.AppendLine("End");
-
-        sb.AppendLine("Insertion _UserEasyAltiumTB3 TargetID='TLSchematicTools' InsertType='After' RefID0='TBSchematic_ToolsStandard280'");
-        sb.AppendLine("    Link _UserEasyAltiumTB4 PLID='EasyAltium'      End");
-        sb.AppendLine("End");
-
-        sb.AppendLine("Insertion _UserEasyAltiumTB5 TargetID='TLPCBToolbar' InsertType='After' RefID0='TBPCB_StandardToolbar780'");
-        sb.AppendLine("    Link _UserEasyAltiumTB6 PLID='EasyAltium'      End");
-        sb.AppendLine("End");
-
-        // 4. Üst Menü Barları (Şematik, PCB, Home/Engagement, Boş Pencere) + Tools Menüsü
-        sb.AppendLine("Insertion _UserEasyAltium1 TargetID='MNSchematicMenu' InsertType='After' RefID0='MNSchematic_Help10'");
+        // 5. Şematik ve PCB Üst Menü Barları (Help yanına) + Tools ve File Menüleri (İkonlu Menü Öğesi)
+        sb.AppendLine("Insertion _UserEasyAltium1 TargetID='MNSchematicMenu' InsertType='After' RefID0='MNSchematic_Help10' ");
         sb.AppendLine("    Link _UserEasyAltium2 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltium3 TargetID='MNSchematic_Tools10' RefID0='SchDoc_Tools'");
+        sb.AppendLine("Insertion _UserEasyAltium3 TargetID='MNSchematic_Tools10' RefID0='SchDoc_Tools' ");
         sb.AppendLine("    Link _UserEasyAltium4 PLID='EasyAltium'      End");
-        sb.AppendLine("    Link _UserEasyAltium4B PLID='EasyAltiumPlace' End");
+        sb.AppendLine("    Link _UserEasyAltium4B PLID='EasyAltiumPlace'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltium5 TargetID='MNPCBMenu' InsertType='After' RefID0='MNPCB_Help10'");
+        sb.AppendLine("Insertion _UserEasyAltiumFileSch TargetID='MNSchematic_File' RefID0='SchDoc_File' ");
+        sb.AppendLine("    Link _UserEasyAltiumFileSchLink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltium5 TargetID='MNPCBMenu' InsertType='After' RefID0='MNPCB_Help10' ");
         sb.AppendLine("    Link _UserEasyAltium6 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltium7 TargetID='MNPCB_Tools10' RefID0='PcbDoc_Tools'");
+        sb.AppendLine("Insertion _UserEasyAltium7 TargetID='MNPCB_Tools10' RefID0='PcbDoc_Tools' ");
         sb.AppendLine("    Link _UserEasyAltium8 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltium9 TargetID='MNEngagementMenu' InsertType='After' RefID0='MNEngagementHelpMenu'");
-        sb.AppendLine("    Link _UserEasyAltium10 PLID='EasyAltium'     End");
+        sb.AppendLine("Insertion _UserEasyAltiumFilePcb TargetID='MNPCB_File' RefID0='PcbDoc_File' ");
+        sb.AppendLine("    Link _UserEasyAltiumFilePcbLink PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
-        sb.AppendLine("Insertion _UserEasyAltium11 TargetID='MNNoDocument' InsertType='After' RefID0='MNNoDocument_Help'");
-        sb.AppendLine("    Link _UserEasyAltium12 PLID='EasyAltium'     End");
+        sb.AppendLine("Insertion _UserEasyAltiumFileNoDoc TargetID='MNNoDocument_File' RefID0='NoDoc' ");
+        sb.AppendLine("    Link _UserEasyAltiumFileNoDocLink PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        // 6. Klasik Araç Çubukları (Açık ise)
+        sb.AppendLine("Insertion _UserEasyAltiumTB1 TargetID='TLWiringTools' InsertType='After' RefID0='TBSchematic_ToolsWiring090' ");
+        sb.AppendLine("    Link _UserEasyAltiumTB2 PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltiumTB3 TargetID='TLSchematicTools' InsertType='After' RefID0='TBSchematic_ToolsStandard280' ");
+        sb.AppendLine("    Link _UserEasyAltiumTB4 PLID='EasyAltium'      End");
+        sb.AppendLine("End");
+
+        sb.AppendLine("Insertion _UserEasyAltiumTB5 TargetID='TLPCBToolbar' InsertType='After' RefID0='TBPCB_StandardToolbar780' ");
+        sb.AppendLine("    Link _UserEasyAltiumTB6 PLID='EasyAltium'      End");
         sb.AppendLine("End");
 
         return sb.ToString();
+    }
+
+    private static string NormalizePathDriveLetter(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && path.Length >= 2 && path[1] == ':' && char.IsLower(path[0]))
+        {
+            return char.ToUpperInvariant(path[0]) + path[1..];
+        }
+        return path;
     }
 }
