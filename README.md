@@ -75,6 +75,10 @@ dotnet run --project src/EasyAltium.Host/EasyAltium.Host.csproj
 "C:\Program Files\Altium\AD26\X2.EXE" -RScriptingSystem:RunScript(ProjectName="<RepoRoot>\altium-bridge\LCSC_Bridge.PrjScr"|ProcName="Bridge.pas>PlaceOrLoadComponent")
 ```
 
+> [!NOTE]
+> **Known Conversion Notes (Schematic Symbols & 3D Bodies):**
+> Depending on the upstream EasyEDA component data, some imported components may occasionally exhibit minor graphical shifts/misalignments in their schematic symbols or slight offsets in their 3D STEP body placement. If needed, you can open the exported `.SchLib` (`./Library/SchLib`) or `.PcbLib` (`./Library/PcbLib`) files directly from the download directory inside Altium Designer to manually adjust and save them.
+
 ---
 
 ## License & Mandatory Attribution
