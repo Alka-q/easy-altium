@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using EasyAltium.Core.Configuration;
+using EasyAltium.Core.Library;
 using EasyAltium.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -222,6 +223,7 @@ public sealed class NpnpCliWrapper
         if (pcbFiles.Length > 0)
         {
             File.Copy(pcbFiles[0], targetPcbLib, overwrite: true);
+            PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(targetPcbLib, part);
             string? extractedFootprint = TryExtractFootprintName(targetSchLib, targetPcbLib, part.LcscId);
             if (!string.IsNullOrWhiteSpace(extractedFootprint))
                 part.FootprintRef = extractedFootprint;

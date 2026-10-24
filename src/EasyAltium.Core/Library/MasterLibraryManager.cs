@@ -51,6 +51,11 @@ public sealed class MasterLibraryManager
                 File.Copy(exportedPcbLibPath, masterPcb, overwrite: true);
             }
 
+            if (File.Exists(masterPcb))
+            {
+                PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(masterPcb, part);
+            }
+
             var entries = await LoadIndexInternalAsync(cancellationToken).ConfigureAwait(false);
             entries.RemoveAll(x => string.Equals(x.LcscId, part.LcscId, StringComparison.OrdinalIgnoreCase));
             entries.Insert(0, new MasterLibraryEntry

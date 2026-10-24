@@ -138,23 +138,149 @@ public sealed class LcscApiClient
                         metadata.FootprintRef = SanitizeAltiumIdentifier(fpName);
                 }
 
-                // 3D Model UUID
+                // 3D Model UUID ve 3D Model Dönüş Açıları (SVGNODE -> attrs.c_rotation)
                 if (pkgDetail.TryGetProperty("dataStr", out JsonElement pkgDataStr) &&
-                    pkgDataStr.ValueKind == JsonValueKind.Object &&
-                    pkgDataStr.TryGetProperty("head", out JsonElement pkgHead) &&
-                    pkgHead.ValueKind == JsonValueKind.Object &&
-                    pkgHead.TryGetProperty("c_para", out JsonElement pkgCPara) &&
-                    pkgCPara.ValueKind == JsonValueKind.Object &&
-                    pkgCPara.TryGetProperty("3DModel", out JsonElement modelProp) &&
-                    modelProp.ValueKind == JsonValueKind.String)
+                    pkgDataStr.ValueKind == JsonValueKind.Object)
                 {
-                    metadata.StepModelUuid = modelProp.GetString() ?? string.Empty;
+                    if (pkgDataStr.TryGetProperty("head", out JsonElement pkgHead) &&
+                        pkgHead.ValueKind == JsonValueKind.Object &&
+                        pkgHead.TryGetProperty("c_para", out JsonElement pkgCPara) &&
+                        pkgCPara.ValueKind == JsonValueKind.Object &&
+                        pkgCPara.TryGetProperty("3DModel", out JsonElement modelProp) &&
+                        modelProp.ValueKind == JsonValueKind.String)
+                    {
+                        metadata.StepModelUuid = modelProp.GetString() ?? string.Empty;
+                    }
+
+                    if (pkgDataStr.TryGetProperty("shape", out JsonElement pkgShapes) &&
+                        pkgShapes.ValueKind == JsonValueKind.Array)
+                    {
+                        ReadEasyEdaOutline3DFromShapes(metadata, pkgShapes);
+                    }
                 }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "EasyEDA API sorgusu sırasında hata oluştu ({LcscId}).", metadata.LcscId);
+        }
+    }
+
+    /// <summary>
+    /// EasyEDA packageDetail.dataStr.shape dizisi içindeki SVGNODE~{...} (outline3D) kaydından
+    /// 3B model dönüş açılarını (c_rotation = "rx,ry,rz") ve varsa UUID bilgisini ayıklar.
+    /// </summary>
+    public static void ReadEasyEdaOutline3DFromShapes(LcscPartMetadata metadata, JsonElement pkgShapes)
+    {
+        foreach (JsonElement shapeItem in pkgShapes.EnumerateArray())
+        {
+            if (shapeItem.ValueKind != JsonValueKind.String)
+                continue;
+
+            string? rawShape = shapeItem.GetString();
+            if (string.IsNullOrWhiteSpace(rawShape) ||
+                !rawShape.StartsWith("SVGNODE~", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryParseOutline3DSvgNode(rawShape, out double rx, out double ry, out double rz, out string? uuid))
+            {
+                metadata.Model3DRotX = rx;
+                metadata.Model3DRotY = ry;
+                metadata.Model3DRotZ = rz;
+
+                if (string.IsNullOrWhiteSpace(metadata.StepModelUuid) && !string.IsNullOrWhiteSpace(uuid))
+                {
+                    metadata.StepModelUuid = uuid;
+                }
+
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tek bir "SVGNODE~{...}" dizgesinden outline3D dönüş açılarını (rx, ry, rz) ve UUID değerini çözümler.
+    /// </summary>
+    public static bool TryParseOutline3DSvgNode(
+        string svgNodeShape,
+        out double rotX,
+        out double rotY,
+        out double rotZ,
+        out string? uuid)
+    {
+        rotX = 0;
+        rotY = 0;
+        rotZ = 0;
+        uuid = null;
+
+        if (string.IsNullOrWhiteSpace(svgNodeShape))
+            return false;
+
+        int tildeIndex = svgNodeShape.IndexOf('~');
+        string jsonPart = tildeIndex >= 0 ? svgNodeShape[(tildeIndex + 1)..].Trim() : svgNodeShape.Trim();
+        if (string.IsNullOrWhiteSpace(jsonPart) || !jsonPart.StartsWith('{'))
+            return false;
+
+        try
+        {
+            using var svgDoc = JsonDocument.Parse(jsonPart);
+            if (!svgDoc.RootElement.TryGetProperty("attrs", out JsonElement attrs) ||
+                attrs.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (attrs.TryGetProperty("c_etype", out JsonElement etypeEl) &&
+                etypeEl.ValueKind == JsonValueKind.String)
+            {
+                string? etype = etypeEl.GetString();
+                if (!string.IsNullOrWhiteSpace(etype) &&
+                    !string.Equals(etype, "outline3D", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            if (attrs.TryGetProperty("uuid", out JsonElement uuidEl) &&
+                uuidEl.ValueKind == JsonValueKind.String)
+            {
+                uuid = uuidEl.GetString();
+            }
+
+            if (attrs.TryGetProperty("c_rotation", out JsonElement rotEl) &&
+                rotEl.ValueKind == JsonValueKind.String)
+            {
+                string? rotStr = rotEl.GetString();
+                if (!string.IsNullOrWhiteSpace(rotStr))
+                {
+                    string[] parts = rotStr.Split(',');
+                    if (parts.Length >= 1 &&
+                        double.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double x))
+                    {
+                        rotX = x;
+                    }
+
+                    if (parts.Length >= 2 &&
+                        double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double y))
+                    {
+                        rotY = y;
+                    }
+
+                    if (parts.Length >= 3 &&
+                        double.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double z))
+                    {
+                        rotZ = z;
+                    }
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

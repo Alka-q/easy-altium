@@ -78,6 +78,21 @@ public sealed partial class LcscPartMetadata
     public string StepModelUuid { get; set; } = string.Empty;
 
     /// <summary>
+    /// EasyEDA outline3D (SVGNODE) üzerinden gelen 3B model X ekseni dönüş açısı (Derece)
+    /// </summary>
+    public double Model3DRotX { get; set; }
+
+    /// <summary>
+    /// EasyEDA outline3D (SVGNODE) üzerinden gelen 3B model Y ekseni dönüş açısı (Derece)
+    /// </summary>
+    public double Model3DRotY { get; set; }
+
+    /// <summary>
+    /// EasyEDA outline3D (SVGNODE) üzerinden gelen 3B model Z ekseni dönüş açısı (Derece)
+    /// </summary>
+    public double Model3DRotZ { get; set; }
+
+    /// <summary>
     /// Ek BOM parametreleri (Tolerance, Voltage_Rating, Power_Rating, RoHS vb.)
     /// </summary>
     public Dictionary<string, string> ExtraParameters { get; init; } = new(StringComparer.OrdinalIgnoreCase);

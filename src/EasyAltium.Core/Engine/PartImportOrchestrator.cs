@@ -140,6 +140,11 @@ public sealed class PartImportOrchestrator
         }
         else
         {
+            if (!string.IsNullOrWhiteSpace(pcbLibPath) && File.Exists(pcbLibPath))
+            {
+                PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(pcbLibPath, part);
+            }
+
             progress?.Report($"[{part.LcscId}] Mod B (SQLite .DbLib -> {part.Category}) veritabanına UPSERT yapılıyor...");
             await _sqliteDbLibManager.UpsertComponentAsync(
                 part: part,

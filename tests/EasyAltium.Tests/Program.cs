@@ -110,5 +110,43 @@ AssertTrue(cliArgs.Contains("-RScriptingSystem:RunScript(ProjectName=\"") &&
            cliArgs.Contains("LCSC_Bridge.PrjScr\"|ProcName=\"Bridge.pas>PlaceOrLoadComponent\")"),
     $"Altium 26.10.1 CLI komutu doğrulandı: {cliArgs}");
 
+// 5. EasyEDA SVGNODE (outline3D -> c_rotation) ve PcbLib 3D Model Dönüş Yaması Testleri
+string sampleSvgNode = """SVGNODE~{"gId":"g1","nodeName":"g","nodeType":1,"attrs":{"c_etype":"outline3D","uuid":"35c6ec85a824426093fa2bfcfef9eb10","c_origin":"420,310","z":"0","c_rotation":"0,0,90"}}""";
+bool svgParsed = LcscApiClient.TryParseOutline3DSvgNode(sampleSvgNode, out double rx, out double ry, out double rz, out string? parsedUuid);
+AssertTrue(svgParsed && rx == 0 && ry == 0 && rz == 90 && parsedUuid == "35c6ec85a824426093fa2bfcfef9eb10",
+    "SVGNODE outline3D c_rotation (0,0,90) ve UUID ayrıştırması başarılı");
+
+AssertTrue(
+    PcbLib3DModelPatcher.FormatFixedWidthAngle(0) == "0.000" &&
+    PcbLib3DModelPatcher.FormatFixedWidthAngle(90) == "90.00" &&
+    PcbLib3DModelPatcher.FormatFixedWidthAngle(180) == "180.0" &&
+    PcbLib3DModelPatcher.FormatFixedWidthAngle(-90) == "270.0",
+    "PcbLib3DModelPatcher 5 baytlık sabit genişlikli açı formatlama doğrulandı");
+
+string tempPcbLib = Path.Combine(Path.GetTempPath(), $"test_patch_{Guid.NewGuid():N}.PcbLib");
+try
+{
+    string mockStream = "HEADER|EMBED=TRUE|ROTX=0.000|ROTY=0.000|ROTZ=0.000|DZ=0|BODY|MODEL.2D.ROTATION=0.000|MODEL.3D.ROTX=0.000|MODEL.3D.ROTY=0.000|MODEL.3D.ROTZ=0.000|MODEL.3D.DZ=0mil|END";
+    byte[] origBytes = System.Text.Encoding.Latin1.GetBytes(mockStream);
+    File.WriteAllBytes(tempPcbLib, origBytes);
+
+    bool patched = PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(tempPcbLib, 0, 0, 90);
+    byte[] newBytes = File.ReadAllBytes(tempPcbLib);
+    string patchedText = System.Text.Encoding.Latin1.GetString(newBytes);
+
+    AssertTrue(
+        patched &&
+        newBytes.Length == origBytes.Length &&
+        patchedText.Contains("|ROTZ=90.00|") &&
+        patchedText.Contains("|MODEL.3D.ROTZ=90.00|") &&
+        patchedText.Contains("|MODEL.2D.ROTATION=0.000|"),
+        "PcbLib3DModelPatcher ikili boyut değiştirmeden ROTZ ve MODEL.3D.ROTZ alanlarını 90.00 olarak güncelledi");
+}
+finally
+{
+    if (File.Exists(tempPcbLib))
+        File.Delete(tempPcbLib);
+}
+
 Console.WriteLine($"=== Sonuç: {passed} Başarılı, {failed} Başarısız ===");
 return failed == 0 ? 0 : 1;
