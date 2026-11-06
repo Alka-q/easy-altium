@@ -6,14 +6,20 @@
 
 ## Key Features
 
+- **EasyEDA Pro-Style Component Browser (`Device/Reuse Block` — v2.0):** Full-featured desktop catalog browser (`ComponentBrowserWindow`) replicating the EasyEDA Pro component selection workflow:
+  - **52+ LCSC System Categories & Subcategories:** Expandable `[+] / [-]` category tree with instant in-memory search filtering (`System`, `Recent`, `Favorite`, and local SQLite `Project` scopes).
+  - **Dynamic Parametric Multi-Column Filters:** Selecting any category dynamically loads its technical parameter columns (`Package`, `Manufacturer`, `Resistance`, `Capacitance`, `Tolerance`, `Voltage Rating`, etc.) using virtualized lists (`VirtualizingStackPanel`) and in-memory category caching for sub-second navigation.
+  - **Rich Component Result Cards:** Displays product thumbnails, MPN, LCSC Part#, footprint, brand, clickable PDF datasheets, `Basic Part` / `Extended Part` badges, 4-tier pricing (`1+`, `10+`, `30+`, `100+`), LCSC/JLCPCB stock counts, **`Add to Lib`**, and one-click **`Place`** (which automatically minimizes the browser and brings Altium Designer to the foreground).
+  - **Hybrid Window Architecture:** Launches directly into the full Component Browser by default (configurable in `Settings`), while preserving a one-click switch (`EasyAltium Bridge`) to the compact `MiniSearchWindow` quick loader.
 - **Version-Agnostic Altium Designer Integration:** Automatically discovers installed Altium Designer versions (`AD*` / `X2.EXE`) and injects a pure-white vector/bitmap toolbar icon directly into Altium's **Quick Access Bar**, **Active Bar** (`TopBarSchematic` & `TopBarPCB`), and **System Toolbar** (`DXPToolbar`) via `DXP.RCS` with automatic self-healing on Altium exit.
 - **Smart Clipboard Watcher (`Win32 AddClipboardFormatListener`):** Detects copied LCSC part numbers matching `^C[1-9]\d{2,}$` (e.g., `C2040`, `C14663`, `C311983`) or LCSC product URLs and displays a bottom-right preview toast (`PartPreviewPopup`) with live stock, pricing, package, and JLCPCB `Basic`/`Extended` SMT class.
 - **Automatic 3D STEP Orientation Fixer (`PcbLib3DModelPatcher`):** Reads EasyEDA `outline3D` (`SVGNODE -> c_rotation`) Euler angles (`ROTX`, `ROTY`, `ROTZ`) and patches generated `.PcbLib` files in-place (`Library/Models/Data` and `Footprint/Data`) while preserving exact OLE Compound File binary stream offsets.
 - **Dual Library Management Modes:**
   - **Mode A (`MasterLibraryManager`):** Rapid prototyping mode using consolidated `LCSC_Master.SchLib` and `LCSC_Master.PcbLib` libraries.
   - **Mode B (`SqliteDbLibManager` & `DbLibFileGenerator`):** Production-grade categorized SQLite database (`lcsc_components.sqlite` across `Resistors`, `Capacitors`, `Inductors`, `ICs`, `Connectors`, `Discrete`, and `Misc` tables) paired with an auto-generated `EasyAltium_LCSC.DbLib` file.
+- **Clean BOM Engineering Units & Designator Classification:** Automatically normalizes Unicode/HTML engineering units (`Ω` -> `Ohm`, `℃` -> `degC`, `±` -> `+/-`, `µ` -> `u`) for Altium ANSI compatibility and assigns accurate schematic designator prefixes (`R?`, `C?`, `L?`, `Q?`, `D?`, `J?`, `F?`, `U?`).
 - **Passive Symbol Template Filter (`PassiveSymbolFilter`):** Optionally binds standard local symbols (`RES_STD`, `CAP_NP_STD`, `CAP_POL_STD`, `IND_STD`) for 2-pin passives while keeping the LCSC footprint, 3D STEP model, and BOM parameters.
-- **Interactive Cursor Placement (`Bridge.pas`):** Loads libraries via `IntegratedLibraryManager`, instantiates the component via `SchServer`, attaches the footprint and BOM parameters, and places the component directly onto the user's schematic cursor (`Sch:MoveSelectedObjects`).
+- **Hotspot Interactive Cursor Placement & Instant Footprint Preview (`Bridge.pas`):** Loads libraries via `IntegratedLibraryManager`, instantiates the component via `SchServer`, binds the explicit `.PcbLib` datafile path (`AddDataFileLink`) for zero-latency footprint/3D previews, and attaches the symbol directly to the mouse cursor hotspot (`Sch:Cut` + `Sch:Paste`).
 
 ---
 
