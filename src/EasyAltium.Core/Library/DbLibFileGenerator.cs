@@ -40,6 +40,11 @@ public sealed class DbLibFileGenerator
             $"Provider=MSDASQL.1;Persist Security Info=False;" +
             $"Extended Properties=\"Driver={{SQLite3 ODBC Driver}};Database={sqliteDatabaseFullPath};StepAPI=0;SyncPragma=NORMAL;NoTXN=0;Timeout=10000;ShortNames=0;LongNames=0;NoCreat=0;NoWCHAR=0;FKSupport=0;JournalMode=;OEMCP=0;LoadExt=;BigInt=0;JDConv=0;\"";
 
+        string dbDir = Path.GetDirectoryName(sqliteDatabaseFullPath) ?? string.Empty;
+        string libraryRootDir = !string.IsNullOrWhiteSpace(dbDir)
+            ? Path.GetFullPath(Path.Combine(dbDir, ".."))
+            : string.Empty;
+
         var sb = new StringBuilder();
         sb.AppendLine("[OutputDatabaseLinkFile]");
         sb.AppendLine("Version=1.0");
@@ -59,9 +64,9 @@ public sealed class DbLibFileGenerator
         sb.AppendLine("LibraryDatabasePath=");
         sb.AppendLine("DatabasePathRelative=0");
         sb.AppendLine("TopPanelCollapsed=0");
-        sb.AppendLine("LibrarySearchPath=");
+        sb.AppendLine($"LibrarySearchPath={libraryRootDir}");
         sb.AppendLine("OrcadMultiValueDelimiter=,");
-        sb.AppendLine("SearchSubDirectories=1");
+        sb.AppendLine("SearchSubDirectories=0");
         sb.AppendLine("SchemaName=");
         sb.AppendLine("LastFocusedTable=ICs");
         sb.AppendLine();

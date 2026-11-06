@@ -339,8 +339,16 @@ begin
                 begin
                     if UpperCase(SchImpl.ModelName) = UpperCase(FootprintRef) then
                     begin
+                        SchImpl.ClearAllDatafileLinks;
+                        if (Trim(PcbLibPath) <> '') and FileExists(PcbLibPath) then
+                            SchImpl.AddDataFileLink(FootprintRef, PcbLibPath, cDocKind_PcbLib);
+                        try
+                            SchImpl.UseComponentLibrary := False;
+                        except
+                        end;
                         SchImpl.IsCurrent := True;
                         FoundImpl := True;
+                        WriteBridgeLog(LogFilePath, 'INFO', 'Footprint datafile link updated: ' + FootprintRef + ' -> ' + PcbLibPath);
                     end
                     else
                     begin
@@ -363,12 +371,114 @@ begin
                 SchImpl.ClearAllDatafileLinks;
                 if (Trim(PcbLibPath) <> '') and FileExists(PcbLibPath) then
                     SchImpl.AddDataFileLink(FootprintRef, PcbLibPath, cDocKind_PcbLib);
+                try
+                    SchImpl.UseComponentLibrary := False;
+                except
+                end;
                 SchImpl.IsCurrent := True;
-                WriteBridgeLog(LogFilePath, 'INFO', 'Footprint linked: ' + FootprintRef);
+                WriteBridgeLog(LogFilePath, 'INFO', 'Footprint linked: ' + FootprintRef + ' -> ' + PcbLibPath);
             end;
         end;
     except
         WriteBridgeLog(LogFilePath, 'WARN', 'Warning while linking footprint: ' + FootprintRef);
+    end;
+end;
+
+{------------------------------------------------------------------------------}
+{ Helper: Ensures existing EasyAltium components on the active sheet have an   }
+{         explicit .PcbLib DataFileLink so Altium never scans all libraries.   }
+{------------------------------------------------------------------------------}
+procedure RepairExistingFootprintLinksOnSheet(
+    SchDoc            : ISch_Document;
+    const PcbLibPath  : String;
+    const LogFilePath : String
+);
+var
+    PcbLibDir     : String;
+    CompIterator  : ISch_Iterator;
+    SheetComp     : ISch_Component;
+    ParamIterator : ISch_Iterator;
+    Param         : ISch_Parameter;
+    ImplIterator  : ISch_Iterator;
+    SchImpl       : ISch_Implementation;
+    LcscPart      : String;
+    MpnVal        : String;
+    CandidateLib  : String;
+begin
+    if (SchDoc = nil) or (Trim(PcbLibPath) = '') then Exit;
+    PcbLibDir := ExtractFilePath(PcbLibPath);
+    if Trim(PcbLibDir) = '' then Exit;
+
+    try
+        CompIterator := SchDoc.SchIterator_Create;
+        CompIterator.AddFilter_ObjectSet(MkSet(eSchComponent));
+        try
+            SheetComp := CompIterator.FirstSchObject;
+            while SheetComp <> nil do
+            begin
+                LcscPart := '';
+                MpnVal   := '';
+
+                ParamIterator := SheetComp.SchIterator_Create;
+                ParamIterator.AddFilter_ObjectSet(MkSet(eParameter));
+                try
+                    Param := ParamIterator.FirstSchObject;
+                    while Param <> nil do
+                    begin
+                        if (UpperCase(Trim(Param.Name)) = 'LCSC_PART') or
+                           (UpperCase(Trim(Param.Name)) = 'LCSC PART') or
+                           (UpperCase(Trim(Param.Name)) = 'SUPPLIER_PART') then
+                        begin
+                            if LcscPart = '' then
+                                LcscPart := Trim(Param.Text);
+                        end
+                        else if (UpperCase(Trim(Param.Name)) = 'MPN') or
+                                (UpperCase(Trim(Param.Name)) = 'MANUFACTURER PART') then
+                        begin
+                            if MpnVal = '' then
+                                MpnVal := Trim(Param.Text);
+                        end;
+                        Param := ParamIterator.NextSchObject;
+                    end;
+                finally
+                    SheetComp.SchIterator_Destroy(ParamIterator);
+                end;
+
+                if (LcscPart <> '') and (MpnVal <> '') then
+                begin
+                    CandidateLib := PcbLibDir + LcscPart + '_' + MpnVal + '.PcbLib';
+                    if FileExists(CandidateLib) then
+                    begin
+                        ImplIterator := SheetComp.SchIterator_Create;
+                        ImplIterator.AddFilter_ObjectSet(MkSet(eImplementation));
+                        try
+                            SchImpl := ImplIterator.FirstSchObject;
+                            while SchImpl <> nil do
+                            begin
+                                if UpperCase(SchImpl.ModelType) = UpperCase(cDocKind_PcbLib) then
+                                begin
+                                    SchImpl.ClearAllDatafileLinks;
+                                    SchImpl.AddDataFileLink(SchImpl.ModelName, CandidateLib, cDocKind_PcbLib);
+                                    try
+                                        SchImpl.UseComponentLibrary := False;
+                                    except
+                                    end;
+                                end;
+                                SchImpl := ImplIterator.NextSchObject;
+                            end;
+                        finally
+                            SheetComp.SchIterator_Destroy(ImplIterator);
+                        end;
+                    end;
+                end;
+
+                SheetComp := CompIterator.NextSchObject;
+            end;
+        finally
+            SchDoc.SchIterator_Destroy(CompIterator);
+        end;
+    except
+        { Non-critical background repair }
     end;
 end;
 
@@ -681,11 +791,21 @@ begin
         if Trim(DescriptionText) <> '' then
             Comp.ComponentDescription := DescriptionText;
 
+        if Trim(EffectiveSchLib) <> '' then
+        begin
+            try
+                Comp.LibraryPath       := EffectiveSchLib;
+                Comp.SourceLibraryName := ExtractFileName(EffectiveSchLib);
+            except
+            end;
+        end;
+
         Comp.CurrentPartID := 1;
 
         { Attach Footprint and BOM Parameters }
         AttachOrUpdateFootprint(Comp, FootprintRef, PcbLibPath, LogFilePath);
         ApplyComponentParameters(Comp, Ini, LogFilePath);
+        RepairExistingFootprintLinksOnSheet(SchDoc, PcbLibPath, LogFilePath);
 
         { Register component in active schematic document }
         SchDoc.RegisterSchObjectInContainer(Comp);
