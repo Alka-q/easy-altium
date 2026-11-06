@@ -195,6 +195,102 @@ public sealed class SqliteDbLibManager
         return total;
     }
 
+    /// <summary>
+    /// Yerel SQLite .DbLib veritabanındaki kayıtlı bileşenleri Component Browser formatında sorgular.
+    /// </summary>
+    public async Task<List<CatalogPartItem>> QueryStoredCatalogPartsAsync(
+        ComponentCategory? filterCategory = null,
+        string? searchKeyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new List<CatalogPartItem>();
+        if (!File.Exists(_config.SqliteDatabasePath))
+            return results;
+
+        await InitializeDatabaseAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        IEnumerable<ComponentCategory> categoriesToScan = filterCategory.HasValue
+            ? new[] { filterCategory.Value }
+            : AllCategories;
+
+        foreach (ComponentCategory category in categoriesToScan)
+        {
+            string tableName = GetSafeTableName(category);
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT
+                    [LCSC_Part],
+                    [MPN],
+                    [Manufacturer],
+                    [Description],
+                    [Package],
+                    [JLCPCB_Class],
+                    [Datasheet_URL],
+                    [Footprint Ref],
+                    [Stock],
+                    [Unit_Price_USD]
+                FROM [{tableName}]
+                ORDER BY [Updated_At_Utc] DESC;
+                """;
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                string lcscId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                string mpn = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                string mfr = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                string desc = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+                string pkg = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+                string jlcClass = reader.IsDBNull(5) ? "Extended Part" : reader.GetString(5);
+                string dsUrl = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
+                string fpRef = reader.IsDBNull(7) ? pkg : reader.GetString(7);
+                int stock = reader.IsDBNull(8) ? 0 : reader.GetInt32(8);
+                string priceStr = reader.IsDBNull(9) ? "0" : reader.GetString(9);
+
+                if (!string.IsNullOrWhiteSpace(searchKeyword))
+                {
+                    string kw = searchKeyword.Trim();
+                    if (!lcscId.Contains(kw, StringComparison.OrdinalIgnoreCase) &&
+                        !mpn.Contains(kw, StringComparison.OrdinalIgnoreCase) &&
+                        !mfr.Contains(kw, StringComparison.OrdinalIgnoreCase) &&
+                        !desc.Contains(kw, StringComparison.OrdinalIgnoreCase) &&
+                        !pkg.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+
+                var tiers = new List<CatalogPriceTier>();
+                if (decimal.TryParse(priceStr, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal unitPrice) && unitPrice > 0)
+                {
+                    tiers.Add(new CatalogPriceTier { MinQuantity = 1, UnitPriceUsd = unitPrice });
+                }
+
+                results.Add(new CatalogPartItem
+                {
+                    LcscId = lcscId,
+                    Mpn = mpn,
+                    Manufacturer = mfr,
+                    Description = desc,
+                    LcscPartName = desc,
+                    Package = pkg,
+                    FootprintTitle = !string.IsNullOrWhiteSpace(fpRef) ? fpRef : pkg,
+                    JlcpcbPartClass = jlcClass,
+                    DatasheetUrl = !string.IsNullOrWhiteSpace(dsUrl) ? dsUrl : $"https://www.lcsc.com/search?q={lcscId}",
+                    ProductUrl = $"https://www.lcsc.com/search?q={lcscId}",
+                    LcscStock = stock,
+                    JlcpcbStock = stock,
+                    PriceTiers = tiers
+                });
+            }
+        }
+
+        return results;
+    }
+
     public static string GetSafeTableName(ComponentCategory category) => category switch
     {
         ComponentCategory.Resistors => "Resistors",

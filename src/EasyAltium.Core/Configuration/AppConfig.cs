@@ -96,9 +96,24 @@ public sealed class AppConfig
     public bool AlwaysOnTopMiniWindow { get; set; } = true;
 
     /// <summary>
+    /// Uygulama açılışında ve Altium araç çubuğu tetiklemesinde doğrudan geniş Component Browser penceresini aç.
+    /// </summary>
+    public bool StartWithComponentBrowser { get; set; } = true;
+
+    /// <summary>
     /// npnp CLI zaman aşımı süresi (saniye).
     /// </summary>
     public int NpnpTimeoutSeconds { get; set; } = 45;
+
+    /// <summary>
+    /// Component Browser'da son yerleştirilen veya incelenen bileşenlerin geçmişi (Recent sekmesi).
+    /// </summary>
+    public List<CatalogPartItem> RecentCatalogParts { get; set; } = new();
+
+    /// <summary>
+    /// Component Browser'da favorilere eklenen bileşenler (Favorite sekmesi).
+    /// </summary>
+    public List<CatalogPartItem> FavoriteCatalogParts { get; set; } = new();
 
     // Hesaplanan Alt Dizin Yolları
     [JsonIgnore]
@@ -246,6 +261,52 @@ public sealed class AppConfig
 
         string json = JsonSerializer.Serialize(this, JsonOptions);
         File.WriteAllText(path, json);
+    }
+
+    public void RecordRecentPart(CatalogPartItem part)
+    {
+        if (part is null || string.IsNullOrWhiteSpace(part.LcscId))
+            return;
+
+        RecentCatalogParts ??= new List<CatalogPartItem>();
+        RecentCatalogParts.RemoveAll(p => string.Equals(p.LcscId, part.LcscId, StringComparison.OrdinalIgnoreCase));
+        RecentCatalogParts.Insert(0, part);
+        while (RecentCatalogParts.Count > 50)
+        {
+            RecentCatalogParts.RemoveAt(RecentCatalogParts.Count - 1);
+        }
+        Save();
+    }
+
+    public bool IsFavoritePart(string? lcscId)
+    {
+        if (string.IsNullOrWhiteSpace(lcscId) || FavoriteCatalogParts is null)
+            return false;
+
+        return FavoriteCatalogParts.Any(p => string.Equals(p.LcscId, lcscId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public bool ToggleFavoritePart(CatalogPartItem part)
+    {
+        if (part is null || string.IsNullOrWhiteSpace(part.LcscId))
+            return false;
+
+        FavoriteCatalogParts ??= new List<CatalogPartItem>();
+        int existingIdx = FavoriteCatalogParts.FindIndex(p => string.Equals(p.LcscId, part.LcscId, StringComparison.OrdinalIgnoreCase));
+        bool isNowFavorite;
+        if (existingIdx >= 0)
+        {
+            FavoriteCatalogParts.RemoveAt(existingIdx);
+            isNowFavorite = false;
+        }
+        else
+        {
+            FavoriteCatalogParts.Insert(0, part);
+            isNowFavorite = true;
+        }
+
+        Save();
+        return isNowFavorite;
     }
 
     public static string GetDefaultConfigFilePath()

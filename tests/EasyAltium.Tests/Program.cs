@@ -225,5 +225,98 @@ AssertTrue(
     LcscApiClient.ResolveCanonicalDesignatorPrefix(buckIcMeta) == "U?",
     "Buck Switching Regulator IC (TPS54302DDCR) preserves U? designator (not SW?)");
 
+// 8. EasyEDA Catalog Browser Parameter Builder, JSON Parser & SQLite Local Catalog Query Tests
+var catalogReq = new CatalogQueryRequest
+{
+    CatalogId = 11262,
+    Page = 1,
+    PageSize = 10,
+    NeedAggs = true,
+    SortField = CatalogSortField.Price,
+    SortDirection = CatalogSortDirection.Asc,
+    SelectedFilters = new List<CatalogSelectedFilter>
+    {
+        new() { ColumnKey = "Package", ColumnTitle = "Package", OptionName = "SOIC-8", OptionValue = "SOIC-8" },
+        new() { ColumnKey = "Manufacturer", ColumnTitle = "Manufacturer", OptionName = "ADI", OptionValue = "ADI", OptionId = "178" },
+        new() { ColumnKey = "Gain", ColumnTitle = "Gain", OptionName = "0dB~20dB", OptionValue = "0dB~20dB" }
+    }
+};
+var builtParams = EasyEdaCatalogClient.BuildFilterAndSortParameters(catalogReq);
+AssertTrue(
+    builtParams["catalog"] == "11262" &&
+    builtParams["standard"] == "SOIC-8" &&
+    builtParams["brand"] == "ADI" &&
+    builtParams["brandId"] == "178" &&
+    builtParams["param"] == "0dB~20dB@Gain" &&
+    builtParams["sortField"] == "price" &&
+    builtParams["sortType"] == "asc" &&
+    builtParams["querySortBySign"] == "1",
+    "EasyEdaCatalogClient builds Package, Manufacturer (with brandId), technical param, and sort query parameters accurately");
+
+string mockCatalogResponse = """
+{
+  "code": 200,
+  "success": true,
+  "result": {
+    "total": 392,
+    "paramList": [
+      {
+        "parameterName": "Package",
+        "parameterValueList": ["-", "16-VQFN-RGT", "SOIC-8"]
+      },
+      {
+        "parameterName": "Manufacturer",
+        "parameterIdList": [178, 100],
+        "parameterValueList": ["ADI", "TI"]
+      },
+      {
+        "parameterName": "Gain",
+        "parameterValueList": ["0V/V~7V/V", "0dB~20dB"]
+      }
+    ],
+    "productList": [
+      {
+        "number": "C578331",
+        "mpn": "AD603ARZ-REEL",
+        "package": "SOIC-8",
+        "manufacturer": "ADI",
+        "stock": 3566,
+        "JLCPCB Part Class": "Extended Part",
+        "price": [[1, "11.5609", "11.5609"], [10, "9.8937", "9.8937"], [30, "8.2580", "8.2580"], [100, "7.4063", "7.4063"]],
+        "image": [{"224x224": "https://assets.lcsc.com/images/lcsc/224x224/C578331.jpg"}],
+        "device_info": {
+          "Description": "Low Noise 90MHz Variable Gain Amplifier",
+          "attributes": {
+            "Supplier Footprint": "SOIC-8",
+            "Datasheet": "https://item.szlcsc.com/datasheet/AD603ARZ-REEL/606108.html",
+            "LCSC Part Name": "90MHz Variable Gain Amplifier"
+          }
+        }
+      }
+    ]
+  }
+}
+""";
+using (var mockDoc = System.Text.Json.JsonDocument.Parse(mockCatalogResponse))
+{
+    var parsedCatalog = EasyEdaCatalogClient.ParseCatalogQueryResponseJson(mockDoc.RootElement, 1, 10);
+    AssertTrue(
+        parsedCatalog.TotalCount == 392 &&
+        parsedCatalog.TotalPages == 40 &&
+        parsedCatalog.FilterColumns.Count == 3 &&
+        parsedCatalog.FilterColumns[1].Options[0].Id == "178" &&
+        parsedCatalog.Items.Count == 1 &&
+        parsedCatalog.Items[0].LcscId == "C578331" &&
+        parsedCatalog.Items[0].Mpn == "AD603ARZ-REEL" &&
+        parsedCatalog.Items[0].PriceTiers.Count == 4 &&
+        parsedCatalog.Items[0].PriceTiers[0].PriceText == "$11.5609",
+        "EasyEdaCatalogClient parses paramList columns, tiered pricing, images, and device_info attributes");
+}
+
+var storedLocalParts = await sqliteManager.QueryStoredCatalogPartsAsync(ComponentCategory.ICs, "RP2040");
+AssertTrue(
+    storedLocalParts.Any(p => p.LcscId == "C2040" && p.Mpn == "RP2040"),
+    "SqliteDbLibManager.QueryStoredCatalogPartsAsync returns stored local components for Project tab");
+
 Console.WriteLine($"=== Results: {passed} Passed, {failed} Failed ===");
 return failed == 0 ? 0 : 1;

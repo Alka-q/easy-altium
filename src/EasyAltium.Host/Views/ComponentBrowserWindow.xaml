@@ -1,0 +1,1134 @@
+<Window x:Class="EasyAltium.Host.Views.ComponentBrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:EasyAltium.Host.ViewModels"
+        Title="Device/Reuse Block — EasyAltium Component Browser"
+        Width="1220"
+        Height="780"
+        MinWidth="960"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="#383838"
+        Foreground="#E5E5E5"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Custom Expander Toggle [+] / [-] for Category TreeView -->
+        <Style x:Key="EasyEdaTreeToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Width" Value="13" />
+            <Setter Property="Height" Value="13" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="BoxBorder"
+                                Background="#333333"
+                                BorderBrush="#8A8A8A"
+                                BorderThickness="1"
+                                Width="13"
+                                Height="13"
+                                SnapsToDevicePixels="True">
+                            <Grid Width="9" Height="9" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <!-- Horizontal bar of + and - -->
+                                <Rectangle Width="7"
+                                           Height="1"
+                                           Fill="#CFCFCF"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                                <!-- Vertical bar of + (hidden when expanded) -->
+                                <Rectangle x:Name="PlusVerticalBar"
+                                           Width="1"
+                                           Height="7"
+                                           Fill="#CFCFCF"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="PlusVerticalBar" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="#D0D0D0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- TreeViewItem Style matching EasyEDA Pro Dark Theme with [+] / [-] and ├─ Tree Lines -->
+        <Style TargetType="TreeViewItem">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+            <Setter Property="Foreground" Value="#E0E0E0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="4,4" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <Grid SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Border x:Name="Bd"
+                                    Grid.Row="0"
+                                    Background="Transparent"
+                                    Padding="{TemplateBinding Padding}"
+                                    MouseLeftButtonDown="CategoryHeaderBorder_OnMouseLeftButtonDown"
+                                    Cursor="Hand">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <!-- Parent [+] / [-] Toggle -->
+                                    <ToggleButton x:Name="Expander"
+                                                  Style="{StaticResource EasyEdaTreeToggleStyle}"
+                                                  IsChecked="{Binding Path=IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                                  ClickMode="Release" />
+
+                                    <!-- Child Horizontal Branch Line (─) -->
+                                    <Rectangle x:Name="ChildBranchLine"
+                                               Width="11"
+                                               Height="1"
+                                               Fill="#787878"
+                                               Margin="-4,0,5,0"
+                                               VerticalAlignment="Center"
+                                               Visibility="{Binding IsSubcategory, Converter={StaticResource BoolToVis}}" />
+
+                                    <ContentPresenter x:Name="PART_Header"
+                                                      ContentSource="Header"
+                                                      VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Subcategories Host with Vertical Tree Trunk Line (│) -->
+                            <Grid x:Name="ChildrenContainer"
+                                  Grid.Row="1">
+                                <Rectangle x:Name="VerticalTrunkLine"
+                                           Width="1"
+                                           Fill="#787878"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Stretch"
+                                           Margin="10,0,0,10" />
+                                <ItemsPresenter x:Name="ItemsHost"
+                                                Margin="11,0,0,0" />
+                            </Grid>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="ChildrenContainer" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsExpanded" Value="False">
+                                <Setter TargetName="ChildrenContainer" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3E4956" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#547494" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 1. TOP TABS & SEARCH BAR -->
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Tabs: LCSC Electronics / EasyAltium -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,6,0">
+                <Border Background="#547494"
+                        BorderBrush="#222222"
+                        BorderThickness="1"
+                        Padding="12,5">
+                    <TextBlock Text="LCSC Electronics"
+                               Foreground="#FFFFFF"
+                               FontSize="12"
+                               FontWeight="SemiBold" />
+                </Border>
+                <Border Background="#2D2D2D"
+                        BorderBrush="#222222"
+                        BorderThickness="0,1,1,1"
+                        Padding="12,5">
+                    <TextBlock Text="EasyAltium Bridge"
+                               Foreground="#B0B0B0"
+                               FontSize="12" />
+                </Border>
+            </StackPanel>
+
+            <!-- Search Input Box -->
+            <Border Grid.Column="1"
+                    Background="#2B2B2B"
+                    BorderBrush="#202020"
+                    BorderThickness="1"
+                    Margin="0,0,6,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="CatalogSearchBox"
+                             Grid.Column="0"
+                             Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                             Background="Transparent"
+                             Foreground="#E5E5E5"
+                             CaretBrush="#F07818"
+                             BorderThickness="0"
+                             FontSize="12.5"
+                             Padding="8,5"
+                             VerticalContentAlignment="Center"
+                             KeyDown="CatalogSearchBox_OnKeyDown" />
+
+                    <TextBlock Grid.Column="0"
+                               Text="Search, at least 2 characters (e.g. STM32, AD603, 100nF 0402, C2040)"
+                               Foreground="#808080"
+                               FontSize="12"
+                               Margin="10,0,0,0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=CatalogSearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Button Grid.Column="1"
+                            Content="✕"
+                            Command="{Binding ClearSearchCommand}"
+                            Background="Transparent"
+                            Foreground="#999999"
+                            BorderThickness="0"
+                            Padding="6,0"
+                            Cursor="Hand"
+                            ToolTip="Clear search" />
+
+                    <Button Grid.Column="2"
+                            Content="🔍"
+                            Command="{Binding SearchCommand}"
+                            Background="Transparent"
+                            Foreground="#CCCCCC"
+                            BorderThickness="0"
+                            Padding="8,0"
+                            Cursor="Hand"
+                            ToolTip="Search LCSC Catalog" />
+                </Grid>
+            </Border>
+
+            <!-- Right Controls: Quick Mode Toggles, Mini Loader & Settings -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox Content="Clipboard"
+                          IsChecked="{Binding MainVm.IsClipboardListening}"
+                          Foreground="#D0D0D0"
+                          FontSize="11.5"
+                          VerticalAlignment="Center"
+                          Margin="2,0,10,0"
+                          ToolTip="Automatically watch Windows clipboard for copied LCSC part numbers (^C[1-9]\d{2,}$)" />
+
+                <CheckBox Content="SQLite .DbLib"
+                          IsChecked="{Binding MainVm.IsSqliteMode}"
+                          Foreground="#D0D0D0"
+                          FontSize="11.5"
+                          VerticalAlignment="Center"
+                          Margin="0,0,10,0"
+                          ToolTip="Toggle between Mode B (Categorized SQLite .DbLib) and Mode A (Consolidated LCSC_Master)" />
+
+                <CheckBox Content="Std Passives"
+                          IsChecked="{Binding MainVm.UsePassiveTemplateSymbol}"
+                          Foreground="#D0D0D0"
+                          FontSize="11.5"
+                          VerticalAlignment="Center"
+                          Margin="0,0,10,0"
+                          ToolTip="Use local Standard Symbol template for 2-pin passives (R/C/L)" />
+
+                <Button Content="Mini Loader"
+                        Command="{Binding OpenMiniWindowCommand}"
+                        Background="#2D2D2D"
+                        Foreground="#D8D8D8"
+                        BorderBrush="#202020"
+                        BorderThickness="1"
+                        Padding="10,5"
+                        Margin="0,0,6,0"
+                        FontSize="12"
+                        Cursor="Hand"
+                        ToolTip="Open compact Mini Search Window" />
+
+                <Button Content="Settings"
+                        Command="{Binding OpenSettingsCommand}"
+                        Background="#2D2D2D"
+                        Foreground="#D8D8D8"
+                        BorderBrush="#202020"
+                        BorderThickness="1"
+                        Padding="10,5"
+                        FontSize="12"
+                        Cursor="Hand"
+                        ToolTip="Open Configuration &amp; Settings" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 2. MAIN WORKSPACE: LEFT SIDEBARS + RIGHT FILTER & RESULTS -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="125" />
+                <ColumnDefinition Width="215" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT SIDEBAR 1: Library Source (System / Recent / Favorite / Project) -->
+            <Border Grid.Column="0"
+                    Background="#2E2E2E"
+                    BorderBrush="#1E1E1E"
+                    BorderThickness="1"
+                    Margin="0,0,6,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Source Filter Input -->
+                    <Border Grid.Row="0"
+                            Background="#262626"
+                            BorderBrush="#1C1C1C"
+                            BorderThickness="0,0,0,1"
+                            Margin="4"
+                            Padding="4,3">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SourceFilterBox"
+                                     Text="{Binding SourceFilterText, UpdateSourceTrigger=PropertyChanged}"
+                                     Background="Transparent"
+                                     Foreground="#E0E0E0"
+                                     CaretBrush="#F07818"
+                                     BorderThickness="0"
+                                     FontSize="11.5" />
+                            <TextBlock Text="Filter"
+                                       Foreground="#7A7A7A"
+                                       FontSize="11.5"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=SourceFilterBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="1" Text="🔍" Foreground="#999999" FontSize="11" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Source Items (System, Recent, Favorite, Project) -->
+                    <ItemsControl Grid.Row="1" ItemsSource="{Binding FilteredSources}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CatalogSourceItemViewModel}">
+                                <Button Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"
+                                        Cursor="Hand"
+                                        BorderThickness="0"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="RowBorder"
+                                                    Background="Transparent"
+                                                    Padding="8,6">
+                                                <TextBlock Text="{Binding Title}"
+                                                           Foreground="#E0E0E0"
+                                                           FontSize="12" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter TargetName="RowBorder" Property="Background" Value="#547494" />
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="RowBorder" Property="Background" Value="#43566B" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+
+            <!-- LEFT SIDEBAR 2: Category Tree (Amplifiers/Comparators, Capacitors, etc.) -->
+            <Border Grid.Column="1"
+                    Background="#2E2E2E"
+                    BorderBrush="#1E1E1E"
+                    BorderThickness="1"
+                    Margin="0,0,8,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Category Filter Input -->
+                    <Border Grid.Row="0"
+                            Background="#262626"
+                            BorderBrush="#1C1C1C"
+                            BorderThickness="0,0,0,1"
+                            Margin="4"
+                            Padding="4,3">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="CategoryFilterBox"
+                                     Text="{Binding CategoryFilterText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                                     Background="Transparent"
+                                     Foreground="#E0E0E0"
+                                     CaretBrush="#F07818"
+                                     BorderThickness="0"
+                                     FontSize="11.5" />
+                            <TextBlock Text="Filter"
+                                       Foreground="#7A7A7A"
+                                       FontSize="11.5"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=CategoryFilterBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="1" Text="🔍" Foreground="#999999" FontSize="11" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Category TreeView -->
+                    <TreeView x:Name="CategoryTreeView"
+                              Grid.Row="1"
+                              ItemsSource="{Binding Categories}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              VirtualizingStackPanel.IsVirtualizing="True"
+                              VirtualizingStackPanel.VirtualizationMode="Recycling"
+                              SelectedItemChanged="CategoryTreeView_OnSelectedItemChanged"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate DataType="{x:Type vm:CatalogCategoryNodeViewModel}"
+                                                      ItemsSource="{Binding Children}">
+                                <TextBlock Text="{Binding Title}"
+                                           ToolTip="{Binding Title}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="168" />
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+
+                    <!-- Loading Categories Overlay -->
+                    <Border Grid.Row="1"
+                            Background="#CC2E2E2E"
+                            Visibility="{Binding IsLoadingCategories, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Loading..."
+                                   Foreground="#D0D0D0"
+                                   FontSize="12"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- RIGHT PANE: DYNAMIC PARAMETRIC FILTERS + SORT BAR + COMPONENT LIST -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- RIGHT TOP: Dynamic Parametric Filter Columns + Loading Overlay -->
+                <Grid Grid.Row="0" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Expand/Collapse Filter Height Button -->
+                    <Button Grid.Column="0"
+                            Content="{Binding FilterExpandChevron}"
+                            Command="{Binding ToggleFilterExpandCommand}"
+                            Width="18"
+                            Height="18"
+                            VerticalAlignment="Center"
+                            Margin="0,0,6,0"
+                            Background="#2E2E2E"
+                            Foreground="#CCCCCC"
+                            BorderBrush="#1E1E1E"
+                            BorderThickness="1"
+                            FontSize="9"
+                            Cursor="Hand"
+                            ToolTip="Click To Expand / Collapse Filter Area" />
+
+                    <!-- Filter Columns Container -->
+                    <Grid Grid.Column="1" MinHeight="145">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      Padding="0,0,0,4">
+                            <ItemsControl ItemsSource="{Binding FilterColumns}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:CatalogFilterColumnViewModel}">
+                                        <StackPanel Width="170" Margin="0,0,8,0">
+                                            <!-- Column Title (Package, Manufacturer, Features, Gain, etc.) -->
+                                            <TextBlock Text="{Binding Title}"
+                                                       Foreground="#E5E5E5"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,0,0,4"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Title}" />
+
+                                            <!-- Filter Column Box -->
+                                            <Border Background="#2E2E2E"
+                                                    BorderBrush="#1F1F1F"
+                                                    BorderThickness="1"
+                                                    Height="{Binding DataContext.FilterColumnHeight, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="*" />
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Per-Column Search Box -->
+                                                    <Border Grid.Row="0"
+                                                            Background="#262626"
+                                                            BorderBrush="#1C1C1C"
+                                                            BorderThickness="0,0,0,1"
+                                                            Padding="5,3">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBox x:Name="ColSearchBox"
+                                                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                                                     Background="Transparent"
+                                                                     Foreground="#E0E0E0"
+                                                                     CaretBrush="#F07818"
+                                                                     BorderThickness="0"
+                                                                     FontSize="11.5" />
+                                                            <TextBlock Text="Filter"
+                                                                       Foreground="#7A7A7A"
+                                                                       FontSize="11.5"
+                                                                       IsHitTestVisible="False">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Text, ElementName=ColSearchBox}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Grid.Column="1" Text="🔍" Foreground="#999999" FontSize="11" />
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <!-- Virtualized Selectable Options List -->
+                                                    <ListBox Grid.Row="1"
+                                                             ItemsSource="{Binding FilteredOptions}"
+                                                             Background="Transparent"
+                                                             BorderThickness="0"
+                                                             Padding="0"
+                                                             VirtualizingPanel.IsVirtualizing="True"
+                                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                                             ScrollViewer.CanContentScroll="True"
+                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                        <ListBox.ItemContainerStyle>
+                                                            <Style TargetType="ListBoxItem">
+                                                                <Setter Property="Padding" Value="0" />
+                                                                <Setter Property="Margin" Value="0" />
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                                <Setter Property="Background" Value="Transparent" />
+                                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                                            <ContentPresenter />
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </Style>
+                                                        </ListBox.ItemContainerStyle>
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:CatalogFilterOptionViewModel}">
+                                                                <ToggleButton IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                              Cursor="Hand"
+                                                                              HorizontalContentAlignment="Stretch">
+                                                                    <ToggleButton.Template>
+                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                            <Border x:Name="OptBorder"
+                                                                                    Background="Transparent"
+                                                                                    Padding="6,3">
+                                                                                <TextBlock Text="{Binding Name}"
+                                                                                           Foreground="#D8D8D8"
+                                                                                           FontSize="11.5"
+                                                                                           TextTrimming="CharacterEllipsis"
+                                                                                           ToolTip="{Binding Name}" />
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                                    <Setter TargetName="OptBorder" Property="Background" Value="#3E4956" />
+                                                                                </Trigger>
+                                                                                <Trigger Property="IsChecked" Value="True">
+                                                                                    <Setter TargetName="OptBorder" Property="Background" Value="#547494" />
+                                                                                </Trigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </ToggleButton.Template>
+                                                                </ToggleButton>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Loading... Overlay on Filter Area (Exactly like Screenshot 2) -->
+                        <Border Background="#E6383838"
+                                Visibility="{Binding IsLoadingFilters, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Loading..."
+                                       Foreground="#E0E0E0"
+                                       FontSize="13"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+
+                        <!-- Empty / Local Mode Filter Notice -->
+                        <Border Background="#2E2E2E"
+                                BorderBrush="#1F1F1F"
+                                BorderThickness="1"
+                                Visibility="{Binding ShowEmptyFiltersMessage, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="No parametric filters available for this selection."
+                                       Foreground="#888888"
+                                       FontSize="12"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- RIGHT MIDDLE: Selected Filter Chips, Clear/Apply Buttons, Sort Bar & Filter Result Count -->
+                <Border Grid.Row="1"
+                        BorderBrush="#222222"
+                        BorderThickness="0,0,0,1"
+                        Padding="0,4,0,8"
+                        Margin="0,0,0,6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Row A: Selected Filter Chips + Clear Filters / Apply Filters Buttons -->
+                        <Grid Grid.Row="0" Margin="24,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Selected Filter Chips -->
+                            <ItemsControl Grid.Column="0" ItemsSource="{Binding SelectedFilterOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:CatalogFilterOptionViewModel}">
+                                        <Border Background="#2B2B2B"
+                                                BorderBrush="#547494"
+                                                BorderThickness="1"
+                                                CornerRadius="2"
+                                                Padding="6,2"
+                                                Margin="0,0,6,4">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding ChipDisplayText}"
+                                                           Foreground="#E0E0E0"
+                                                           FontSize="11"
+                                                           Margin="0,0,6,0" />
+                                                <Button Content="✕"
+                                                        Command="{Binding DataContext.RemoveSingleFilterCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Background="Transparent"
+                                                        Foreground="#AAAAAA"
+                                                        BorderThickness="0"
+                                                        FontSize="10"
+                                                        Cursor="Hand" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Clear Filters & Apply Filters Buttons -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Clear Filters"
+                                        Command="{Binding ClearFiltersCommand}"
+                                        Background="#FFFFFF"
+                                        Foreground="#2B7DE9"
+                                        BorderBrush="#2B7DE9"
+                                        BorderThickness="1"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0"
+                                        FontSize="12"
+                                        Cursor="Hand" />
+
+                                <Button Content="Apply Filters"
+                                        Command="{Binding ApplyFiltersCommand}"
+                                        Background="#F07818"
+                                        Foreground="#FFFFFF"
+                                        BorderBrush="#D4650F"
+                                        BorderThickness="1"
+                                        Padding="10,4"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
+                                        Cursor="Hand" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Row B: Sort Buttons (Price, Stock, Sales) + Filter Result: XXX -->
+                        <Grid Grid.Row="1" Margin="24,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Button Content="{Binding PriceSortLabel}"
+                                        Command="{Binding ToggleSortCommand}"
+                                        CommandParameter="Price"
+                                        Background="#2E2E2E"
+                                        Foreground="#D8D8D8"
+                                        BorderBrush="#1E1E1E"
+                                        BorderThickness="1"
+                                        Padding="12,3"
+                                        FontSize="11.5"
+                                        Cursor="Hand" />
+                                <Button Content="{Binding StockSortLabel}"
+                                        Command="{Binding ToggleSortCommand}"
+                                        CommandParameter="Stock"
+                                        Background="#2E2E2E"
+                                        Foreground="#D8D8D8"
+                                        BorderBrush="#1E1E1E"
+                                        BorderThickness="0,1,1,1"
+                                        Padding="12,3"
+                                        FontSize="11.5"
+                                        Cursor="Hand" />
+                                <Button Content="{Binding SalesSortLabel}"
+                                        Command="{Binding ToggleSortCommand}"
+                                        CommandParameter="Sales"
+                                        Background="#2E2E2E"
+                                        Foreground="#D8D8D8"
+                                        BorderBrush="#1E1E1E"
+                                        BorderThickness="0,1,1,1"
+                                        Padding="12,3"
+                                        FontSize="11.5"
+                                        Cursor="Hand" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12">
+                                <Run Text="Filter Result:" Foreground="#CCCCCC" />
+                                <Run Text="{Binding TotalCount, Mode=OneWay}" Foreground="#F07818" FontWeight="Bold" />
+                            </TextBlock>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- RIGHT BOTTOM: Component Results List + Loading Overlay -->
+                <Grid Grid.Row="2">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ProductItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:CatalogPartItemViewModel}">
+                                    <Border Background="Transparent"
+                                            BorderBrush="#252525"
+                                            BorderThickness="0,0,0,1"
+                                            Padding="12,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="118" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="165" />
+                                                <ColumnDefinition Width="185" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 1. Product Thumbnail Image (1cm x 1cm grid photo from LCSC) -->
+                                            <Border Grid.Column="0"
+                                                    Width="104"
+                                                    Height="104"
+                                                    Background="#FFFFFF"
+                                                    BorderBrush="#222222"
+                                                    BorderThickness="1"
+                                                    HorizontalAlignment="Left"
+                                                    VerticalAlignment="Top">
+                                                <Grid>
+                                                    <TextBlock Text="IC / SMD"
+                                                               Foreground="#999999"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                    <Image Source="{Binding ImageUrl, IsAsync=True}"
+                                                           Stretch="Uniform"
+                                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 2. Part Details (MPN Link, Footprint, LCSC Part#, Brand, Datasheet, Description) -->
+                                            <Grid Grid.Column="1" Margin="8,0,12,0" VerticalAlignment="Top">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <!-- MPN Title Link + JLCPCB Class Badge + Favorite Star -->
+                                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                                                    <Button Command="{Binding OpenProductUrlCommand}"
+                                                            Cursor="Hand"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Padding="0"
+                                                            Margin="0,0,10,0">
+                                                        <TextBlock Text="{Binding Mpn}"
+                                                                   Foreground="#2B90F5"
+                                                                   FontSize="13.5"
+                                                                   FontWeight="SemiBold"
+                                                                   TextDecorations="Underline" />
+                                                    </Button>
+
+                                                    <Border Background="#2A333E"
+                                                            BorderBrush="#3D5269"
+                                                            BorderThickness="1"
+                                                            CornerRadius="2"
+                                                            Padding="5,1"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,8,0">
+                                                        <TextBlock Text="{Binding JlcpcbClassDisplay}"
+                                                                   Foreground="#8EC5FC"
+                                                                   FontSize="10.5" />
+                                                    </Border>
+
+                                                    <Button Content="{Binding FavoriteStarText}"
+                                                            Command="{Binding ToggleFavoriteCommand}"
+                                                            Background="Transparent"
+                                                            Foreground="#F59E0B"
+                                                            BorderThickness="0"
+                                                            FontSize="14"
+                                                            Cursor="Hand"
+                                                            ToolTip="Add / Remove Favorite" />
+                                                </StackPanel>
+
+                                                <!-- Footprint & LCSC Part# -->
+                                                <Grid Grid.Row="1" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="180" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Column="0" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="Footprint:" Foreground="#9A9A9A" />
+                                                        <Run Text="{Binding FootprintDisplay, Mode=OneWay}" Foreground="#E0E0E0" />
+                                                    </TextBlock>
+
+                                                    <TextBlock Grid.Column="1" FontSize="12">
+                                                        <Run Text="LCSC Part# " Foreground="#9A9A9A" />
+                                                        <Run Text="{Binding LcscId, Mode=OneWay}" Foreground="#E0E0E0" FontWeight="SemiBold" />
+                                                    </TextBlock>
+                                                </Grid>
+
+                                                <!-- Brand & PDF Datasheet -->
+                                                <Grid Grid.Row="2" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="180" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Column="0" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="Brand:" Foreground="#9A9A9A" />
+                                                        <Run Text="{Binding BrandDisplay, Mode=OneWay}" Foreground="#2B90F5" TextDecorations="Underline" />
+                                                    </TextBlock>
+
+                                                    <Button Grid.Column="1"
+                                                            Command="{Binding OpenDatasheetCommand}"
+                                                            Cursor="Hand"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            HorizontalAlignment="Left"
+                                                            Padding="0">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Border Background="#C93B2B"
+                                                                    CornerRadius="2"
+                                                                    Padding="3,0"
+                                                                    Margin="0,0,5,0"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="PDF" Foreground="#FFFFFF" FontSize="9.5" FontWeight="Bold" />
+                                                            </Border>
+                                                            <TextBlock Text="Datasheet"
+                                                                       Foreground="#2B90F5"
+                                                                       FontSize="12"
+                                                                       TextDecorations="Underline" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </Grid>
+
+                                                <!-- LCSC Part Name / Description -->
+                                                <TextBlock Grid.Row="3"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding PartNameDisplay}">
+                                                    <Run Text="LCSC Part Name:" Foreground="#9A9A9A" />
+                                                    <Run Text="{Binding PartNameDisplay, Mode=OneWay}" Foreground="#D8D8D8" />
+                                                </TextBlock>
+                                            </Grid>
+
+                                            <!-- 3. Tiered Pricing (1+, 10+, 30+, 100+) -->
+                                            <ItemsControl Grid.Column="2"
+                                                          ItemsSource="{Binding PriceTiers}"
+                                                          VerticalAlignment="Top"
+                                                          Margin="0,2,10,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,5">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="52" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Text="{Binding LabelText}"
+                                                                       Foreground="#CCCCCC"
+                                                                       FontSize="12"
+                                                                       TextAlignment="Right" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding PriceText}"
+                                                                       Foreground="#E68A3E"
+                                                                       FontSize="12"
+                                                                       FontWeight="SemiBold" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- 4. LCSC Stock, JLCPCB Stock & Place Button -->
+                                            <Grid Grid.Column="3" VerticalAlignment="Stretch">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" FontSize="12" Margin="0,2,0,5">
+                                                    <Run Text="LCSC Stock:" Foreground="#9A9A9A" />
+                                                    <Run Text="{Binding LcscStockDisplay, Mode=OneWay}" Foreground="#E68A3E" FontWeight="SemiBold" />
+                                                </TextBlock>
+
+                                                <TextBlock Grid.Row="1" FontSize="12" Margin="0,0,0,8">
+                                                    <Run Text="JLCPCB Stock:" Foreground="#9A9A9A" />
+                                                    <Run Text="{Binding JlcpcbStockDisplay, Mode=OneWay}" Foreground="#E68A3E" FontWeight="SemiBold" />
+                                                </TextBlock>
+
+                                                <StackPanel Grid.Row="3"
+                                                            Orientation="Horizontal"
+                                                            HorizontalAlignment="Right"
+                                                            VerticalAlignment="Bottom">
+                                                    <Button Content="Add to Lib"
+                                                            Command="{Binding AddToLibraryCommand}"
+                                                            Background="Transparent"
+                                                            Foreground="#2B90F5"
+                                                            BorderThickness="0"
+                                                            FontSize="11.5"
+                                                            Margin="0,0,12,0"
+                                                            VerticalAlignment="Center"
+                                                            Cursor="Hand"
+                                                            ToolTip="Download and add to Altium library without cursor placement" />
+
+                                                    <Button Content="{Binding PlaceButtonText}"
+                                                            Command="{Binding PlaceCommand}"
+                                                            Background="#4A4A4A"
+                                                            Foreground="#F0F0F0"
+                                                            BorderBrush="#222222"
+                                                            BorderThickness="1"
+                                                            Width="68"
+                                                            Height="26"
+                                                            FontSize="12"
+                                                            Cursor="Hand"
+                                                            ToolTip="Download symbol, footprint &amp; 3D STEP model and place directly on Altium Designer cursor" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Loading... Overlay on Product List (Exactly like Screenshot 2) -->
+                    <Border Background="#E6383838"
+                            Visibility="{Binding IsLoadingProducts, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Loading..."
+                                   Foreground="#E0E0E0"
+                                   FontSize="13.5"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+
+                    <!-- Empty Results Notice -->
+                    <Border Background="#383838"
+                            Visibility="{Binding ShowEmptyProductsMessage, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="No components found matching the current filters."
+                                   Foreground="#999999"
+                                   FontSize="13"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- 3. BOTTOM PAGINATION & STATUS BAR -->
+        <Grid Grid.Row="2" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Status Text -->
+            <TextBlock Grid.Column="0"
+                       Text="{Binding StatusMessage}"
+                       Foreground="#B8B8B8"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="0,0,16,0" />
+
+            <!-- Pagination Controls + Cancel Button -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="|&lt;"
+                        Command="{Binding PrevPageCommand}"
+                        Background="#2E2E2E"
+                        Foreground="#CCCCCC"
+                        BorderBrush="#202020"
+                        BorderThickness="1"
+                        Width="24"
+                        Height="24"
+                        Margin="0,0,4,0"
+                        FontSize="11"
+                        Cursor="Hand" />
+
+                <Border Background="#202020"
+                        BorderBrush="#151515"
+                        BorderThickness="1"
+                        MinWidth="32"
+                        Height="24"
+                        Padding="6,0"
+                        Margin="0,0,4,0">
+                    <TextBlock Text="{Binding CurrentPage}"
+                               Foreground="#FFFFFF"
+                               FontSize="12"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+
+                <Button Content="&gt;|"
+                        Command="{Binding NextPageCommand}"
+                        Background="#2E2E2E"
+                        Foreground="#CCCCCC"
+                        BorderBrush="#202020"
+                        BorderThickness="1"
+                        Width="24"
+                        Height="24"
+                        Margin="0,0,10,0"
+                        FontSize="11"
+                        Cursor="Hand" />
+
+                <TextBlock Text="{Binding PaginationSummaryText}"
+                           Foreground="#CCCCCC"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0" />
+
+                <ComboBox ItemsSource="{Binding PageSizeOptions}"
+                          SelectedItem="{Binding SelectedPageSizeOption, Mode=TwoWay}"
+                          Width="86"
+                          Height="24"
+                          FontSize="11.5"
+                          Margin="0,0,16,0"
+                          VerticalContentAlignment="Center" />
+
+                <Button Content="Cancel"
+                        Click="CancelButton_OnClick"
+                        Background="#4A4A4A"
+                        Foreground="#E5E5E5"
+                        BorderBrush="#222222"
+                        BorderThickness="1"
+                        Width="78"
+                        Height="26"
+                        FontSize="12"
+                        Cursor="Hand" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

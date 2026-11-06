@@ -29,6 +29,7 @@ public partial class App : System.Windows.Application
     private AppConfig? _config;
     private MainViewModel? _mainViewModel;
     private MiniSearchWindow? _miniWindow;
+    private ComponentBrowserWindow? _componentBrowserWindow;
     private SettingsWindow? _settingsWindow;
     private PartPreviewPopup? _previewPopup;
     private ClipboardWatcherService? _clipboardWatcher;
@@ -53,7 +54,10 @@ public partial class App : System.Windows.Application
 
         _mainViewModel = new MainViewModel(_config);
         _miniWindow = new MiniSearchWindow(_mainViewModel);
-        MainWindow = _miniWindow;
+        _componentBrowserWindow = new ComponentBrowserWindow(_config, _mainViewModel);
+        _componentBrowserWindow.ViewModel.OpenMiniWindowRequested += (_, _) => ShowAndActivateMiniWindow();
+
+        MainWindow = _config.StartWithComponentBrowser ? _componentBrowserWindow : _miniWindow;
 
         _settingsWindow = new SettingsWindow(_config);
         _settingsWindow.SettingsSaved += (_, _) =>
@@ -69,13 +73,12 @@ public partial class App : System.Windows.Application
         };
         _trayIcon = new TrayIconService(_config);
 
-        _miniWindow.SourceInitialized += (_, _) =>
-        {
-            _clipboardWatcher.AttachToWindow(_miniWindow);
-            // Pre-create the SettingsWindow Win32 HWND on startup so clicking Settings opens in <1ms
-            _ = new WindowInteropHelper(_settingsWindow).EnsureHandle();
-            _mainViewModel.AppendLog("Win32 Clipboard Watcher and Altium Toolbar icon ready.");
-        };
+        // Ensure MiniWindow Win32 HWND exists even when starting directly in ComponentBrowserWindow
+        // so Win32 AddClipboardFormatListener always receives clipboard notifications.
+        _ = new WindowInteropHelper(_miniWindow).EnsureHandle();
+        _clipboardWatcher.AttachToWindow(_miniWindow);
+        _ = new WindowInteropHelper(_settingsWindow).EnsureHandle();
+        _mainViewModel.AppendLog("Win32 Clipboard Watcher and Altium Toolbar icon ready.");
 
         _mainViewModel.ClipboardListeningChanged += (_, enabled) =>
         {
@@ -86,8 +89,11 @@ public partial class App : System.Windows.Application
         };
 
         _mainViewModel.OpenSettingsRequested += (_, _) => ShowSettingsDialog();
+        _mainViewModel.OpenComponentBrowserRequested += (_, _) => ShowAndActivateComponentBrowser();
 
+        _trayIcon.ShowPrimaryWindowRequested += (_, _) => ShowPrimaryWindow();
         _trayIcon.ShowMiniWindowRequested += (_, _) => ShowAndActivateMiniWindow();
+        _trayIcon.OpenComponentBrowserRequested += (_, _) => ShowAndActivateComponentBrowser();
         _trayIcon.InstallToolbarRequested += (_, _) => InstallAltiumToolbarWithFeedback();
         _trayIcon.OpenSettingsRequested += (_, _) => ShowSettingsDialog();
         _trayIcon.ClipboardListeningToggled += (_, enabled) =>
@@ -118,7 +124,8 @@ public partial class App : System.Windows.Application
 
         StartSingleInstanceListener();
         StartDxpRcsSelfHealingMonitor();
-        _miniWindow.Show();
+
+        ShowPrimaryWindow();
 
         // Verify icon assets and DXP.RCS registration in the background without delaying UI startup
         AppConfig cfg = _config;
@@ -151,7 +158,7 @@ public partial class App : System.Windows.Application
                 int signaled = WaitHandle.WaitAny([_showWindowEvent, token.WaitHandle]);
                 if (signaled == 0 && !token.IsCancellationRequested)
                 {
-                    Dispatcher.BeginInvoke(ShowAndActivateMiniWindow);
+                    Dispatcher.BeginInvoke(ShowPrimaryWindow);
                 }
             }
         }, token);
@@ -225,6 +232,14 @@ public partial class App : System.Windows.Application
         }
     }
 
+    private void ShowPrimaryWindow()
+    {
+        if (_config?.StartWithComponentBrowser != false)
+            ShowAndActivateComponentBrowser();
+        else
+            ShowAndActivateMiniWindow();
+    }
+
     private void ShowAndActivateMiniWindow()
     {
         if (_miniWindow is null)
@@ -239,6 +254,22 @@ public partial class App : System.Windows.Application
         BringWindowToFront(_miniWindow);
     }
 
+    private void ShowAndActivateComponentBrowser()
+    {
+        if (_config is null || _mainViewModel is null)
+            return;
+
+        _componentBrowserWindow ??= new ComponentBrowserWindow(_config, _mainViewModel);
+
+        if (!_componentBrowserWindow.IsVisible)
+            _componentBrowserWindow.Show();
+
+        if (_componentBrowserWindow.WindowState == WindowState.Minimized)
+            _componentBrowserWindow.WindowState = WindowState.Normal;
+
+        BringWindowToFront(_componentBrowserWindow);
+    }
+
     private void ShowSettingsDialog()
     {
         if (_config is null || _mainViewModel is null)
@@ -247,7 +278,12 @@ public partial class App : System.Windows.Application
         _settingsWindow ??= new SettingsWindow(_config);
         _settingsWindow.LoadFromConfig();
 
-        if (_miniWindow is { IsVisible: true } && _miniWindow.WindowState != WindowState.Minimized)
+        if (_componentBrowserWindow is { IsVisible: true } && _componentBrowserWindow.WindowState != WindowState.Minimized)
+        {
+            _settingsWindow.Left = _componentBrowserWindow.Left + (_componentBrowserWindow.Width - _settingsWindow.Width) / 2;
+            _settingsWindow.Top = _componentBrowserWindow.Top + (_componentBrowserWindow.Height - _settingsWindow.Height) / 2;
+        }
+        else if (_miniWindow is { IsVisible: true } && _miniWindow.WindowState != WindowState.Minimized)
         {
             _settingsWindow.Left = _miniWindow.Left + (_miniWindow.Width - _settingsWindow.Width) / 2;
             _settingsWindow.Top = _miniWindow.Top + (_miniWindow.Height - _settingsWindow.Height) / 2;
@@ -288,6 +324,12 @@ public partial class App : System.Windows.Application
         {
             _settingsWindow.AllowFullClose = true;
             _settingsWindow.Close();
+        }
+
+        if (_componentBrowserWindow is not null)
+        {
+            _componentBrowserWindow.AllowFullClose = true;
+            _componentBrowserWindow.Close();
         }
 
         if (_miniWindow is not null)

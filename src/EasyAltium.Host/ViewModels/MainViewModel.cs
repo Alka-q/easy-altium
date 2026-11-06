@@ -29,6 +29,7 @@ public sealed class MainViewModel : ObservableObject
 
     public event EventHandler<bool>? ClipboardListeningChanged;
     public event EventHandler? OpenSettingsRequested;
+    public event EventHandler? OpenComponentBrowserRequested;
 
     public MainViewModel(AppConfig config)
     {
@@ -48,6 +49,7 @@ public sealed class MainViewModel : ObservableObject
         LoadLibraryOnlyCommand = new AsyncRelayCommand(_ => ExecuteImportAsync(BridgeAction.LoadOnly), _ => !IsBusy && HasCurrentPart);
         OpenDatasheetCommand = new RelayCommand(_ => OpenCurrentDatasheet(), _ => HasCurrentPart);
         OpenSettingsCommand = new RelayCommand(_ => OpenSettingsRequested?.Invoke(this, EventArgs.Empty));
+        OpenComponentBrowserCommand = new RelayCommand(_ => OpenComponentBrowserRequested?.Invoke(this, EventArgs.Empty));
 
         _ = RefreshDatabaseStatsAsync();
     }
@@ -63,6 +65,7 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand LoadLibraryOnlyCommand { get; }
     public RelayCommand OpenDatasheetCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
+    public RelayCommand OpenComponentBrowserCommand { get; }
 
     public string SearchLcscId
     {

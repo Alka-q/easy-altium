@@ -87,6 +87,11 @@
                          Padding="8,5" />
 
                 <StackPanel Margin="0,12,0,0">
+                    <CheckBox x:Name="StartWithBrowserCheck"
+                              Content="Start with Full Component Browser (EasyEDA Catalog Mode as main window)"
+                              Foreground="#FBBF24"
+                              FontWeight="SemiBold"
+                              Margin="0,4" />
                     <CheckBox x:Name="InteractivePlacementCheck"
                               Content="Attach component to mouse cursor on schematic (InteractiveCursor)"
                               Foreground="#D1D5DB"

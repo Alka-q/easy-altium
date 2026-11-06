@@ -36,6 +36,7 @@ public partial class SettingsWindow : Window
         NpnpArgsBox.Text = _config.NpnpArgumentsTemplate;
         LibraryRootBox.Text = _config.LibraryRootDirectory;
         PassiveTemplateBox.Text = _config.PassiveTemplateSchLibPath;
+        StartWithBrowserCheck.IsChecked = _config.StartWithComponentBrowser;
         InteractivePlacementCheck.IsChecked = _config.PlacementMethod == PlacementMethod.InteractiveCursor;
         OpenLibIfNoSchCheck.IsChecked = _config.OpenLibraryIfNoSchDoc;
     }
@@ -74,6 +75,7 @@ public partial class SettingsWindow : Window
         _config.NpnpArgumentsTemplate = NpnpArgsBox.Text.Trim();
         _config.LibraryRootDirectory = LibraryRootBox.Text.Trim();
         _config.PassiveTemplateSchLibPath = PassiveTemplateBox.Text.Trim();
+        _config.StartWithComponentBrowser = StartWithBrowserCheck.IsChecked == true;
         _config.PlacementMethod = InteractivePlacementCheck.IsChecked == true
             ? PlacementMethod.InteractiveCursor
             : PlacementMethod.DirectToSheet;

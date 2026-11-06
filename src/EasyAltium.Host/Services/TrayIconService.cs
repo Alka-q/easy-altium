@@ -13,7 +13,9 @@ public sealed class TrayIconService : IDisposable
     private readonly Icon _generatedIcon;
     private readonly ToolStripMenuItem _clipboardMenuItem;
 
+    public event EventHandler? ShowPrimaryWindowRequested;
     public event EventHandler? ShowMiniWindowRequested;
+    public event EventHandler? OpenComponentBrowserRequested;
     public event EventHandler? InstallToolbarRequested;
     public event EventHandler? OpenSettingsRequested;
     public event EventHandler<bool>? ClipboardListeningToggled;
@@ -27,10 +29,13 @@ public sealed class TrayIconService : IDisposable
 
         var contextMenu = new ContextMenuStrip();
 
-        var showWindowItem = new ToolStripMenuItem("Show / Hide Mini Search Window")
+        var openBrowserItem = new ToolStripMenuItem("Open Component Browser (EasyEDA Catalog)")
         {
             Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold)
         };
+        openBrowserItem.Click += (_, _) => OpenComponentBrowserRequested?.Invoke(this, EventArgs.Empty);
+
+        var showWindowItem = new ToolStripMenuItem("Show / Hide Mini Search Window");
         showWindowItem.Click += (_, _) => ShowMiniWindowRequested?.Invoke(this, EventArgs.Empty);
 
         _clipboardMenuItem = new ToolStripMenuItem("Clipboard Watcher Active (Detect LCSC)")
@@ -50,6 +55,7 @@ public sealed class TrayIconService : IDisposable
         var exitItem = new ToolStripMenuItem("Exit EasyAltium");
         exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
+        contextMenu.Items.Add(openBrowserItem);
         contextMenu.Items.Add(showWindowItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(_clipboardMenuItem);
@@ -66,7 +72,7 @@ public sealed class TrayIconService : IDisposable
             Visible = true
         };
 
-        _notifyIcon.DoubleClick += (_, _) => ShowMiniWindowRequested?.Invoke(this, EventArgs.Empty);
+        _notifyIcon.DoubleClick += (_, _) => ShowPrimaryWindowRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void UpdateClipboardCheckedState(bool isListening)
