@@ -42,10 +42,57 @@ public sealed class NpnpCliWrapper
 
     public async Task<NpnpExportResult> ExportComponentAsync(
         LcscPartMetadata part,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool forceReexport = false)
     {
         ArgumentNullException.ThrowIfNull(part);
         _config.EnsureDirectoriesExist();
+
+        // 1. Yerel Önbellek (Fast-Path) Kontrolü:
+        // Mode B (SqliteDbLib) içinde ilgili bileşenin .SchLib ve .PcbLib dosyaları zaten diskte mevcutsa
+        // npnp.exe subprocess'ini ve ağ indirmesini atlayarak doğrudan mevcut dosyaları kullan (~0ms).
+        if (!forceReexport && _config.LibraryMode == LibraryMode.SqliteDbLib)
+        {
+            string safeMpn = LcscApiClient.SanitizeAltiumIdentifier(part.Mpn);
+            string cachedSchLib = Path.Combine(_config.SchLibDirectory, $"{part.LcscId}_{safeMpn}.SchLib");
+            string cachedPcbLib = Path.Combine(_config.PcbLibDirectory, $"{part.LcscId}_{safeMpn}.PcbLib");
+            string cachedStep = Path.Combine(_config.StepDirectory, $"{part.LcscId}_{safeMpn}.step");
+
+            if (!File.Exists(cachedSchLib))
+            {
+                cachedSchLib = Directory.GetFiles(_config.SchLibDirectory, $"{part.LcscId}_*.SchLib").FirstOrDefault() ?? cachedSchLib;
+            }
+            if (!File.Exists(cachedPcbLib))
+            {
+                cachedPcbLib = Directory.GetFiles(_config.PcbLibDirectory, $"{part.LcscId}_*.PcbLib").FirstOrDefault() ?? cachedPcbLib;
+            }
+            if (!File.Exists(cachedStep))
+            {
+                cachedStep = Directory.GetFiles(_config.StepDirectory, $"{part.LcscId}_*.step").FirstOrDefault() ?? cachedStep;
+            }
+
+            if (File.Exists(cachedSchLib) && File.Exists(cachedPcbLib))
+            {
+                string? extractedLibRef = TryExtractLibRefFromSchLib(cachedSchLib, part.LcscId);
+                if (!string.IsNullOrWhiteSpace(extractedLibRef))
+                    part.LibRef = extractedLibRef;
+
+                PcbLib3DModelPatcher.TryPatchPcbLib3DRotation(cachedPcbLib, part);
+                string? extractedFootprint = TryExtractFootprintName(cachedSchLib, cachedPcbLib, part.LcscId);
+                if (!string.IsNullOrWhiteSpace(extractedFootprint))
+                    part.FootprintRef = extractedFootprint;
+
+                return new NpnpExportResult(
+                    IsSuccess: true,
+                    RequiresFallback: false,
+                    SchLibPath: cachedSchLib,
+                    PcbLibPath: cachedPcbLib,
+                    StepModelPath: File.Exists(cachedStep) ? cachedStep : string.Empty,
+                    ExitCode: 0,
+                    StandardOutput: "Cached local library files reused.",
+                    StandardError: string.Empty);
+            }
+        }
 
         string stagingDir = Path.Combine(_config.LibraryRootDirectory, ".staging", $"{part.LcscId}_{Guid.NewGuid():N}");
         Directory.CreateDirectory(stagingDir);
@@ -57,6 +104,9 @@ public sealed class NpnpCliWrapper
                 .Replace("{OUTPUT_DIR}", stagingDir, StringComparison.OrdinalIgnoreCase);
 
             _logger.LogInformation("npnp başlatılıyor: {Exe} {Args}", _config.NpnpExecutablePath, arguments);
+
+            // 3D STEP modeli indirmesini ana npnp altium dönüşümüyle PARALEL başlat
+            Task stepTask = TryExportStepModelAsync(part.LcscId, stagingDir, cancellationToken);
 
             var psi = new ProcessStartInfo
             {
@@ -163,8 +213,8 @@ public sealed class NpnpCliWrapper
                     ErrorReason: $"npnp exit code {process.ExitCode}: {stdErr.Trim()}");
             }
 
-            // 3D STEP modelini de indir (npnp model <LCSC_ID> -o "<stagingDir>" --force)
-            await TryExportStepModelAsync(part.LcscId, stagingDir, cancellationToken).ConfigureAwait(false);
+            // Paralel başlatılan 3D STEP modeli indirmesinin tamamlanmasını bekle
+            await stepTask.ConfigureAwait(false);
 
             // Üretilen .SchLib, .PcbLib ve .step dosyalarını hedef dizinlere taşı
             return OrganizeExportedFiles(part, stagingDir, stdOut, stdErr);

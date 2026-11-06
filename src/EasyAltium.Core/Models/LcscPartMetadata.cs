@@ -149,15 +149,52 @@ public sealed partial class LcscPartMetadata
             ["Unit_Price_USD"] = UnitPriceUsd.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture)
         };
 
-        if (!string.IsNullOrWhiteSpace(Value))
-            dict["Value"] = Value;
+        if (!string.IsNullOrWhiteSpace(Value) && Value != "-")
+            dict["Value"] = NormalizeEngineeringUnitsForAltium(Value);
 
         foreach (var kvp in ExtraParameters)
         {
             if (!string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
-                dict[kvp.Key] = kvp.Value;
+                dict[kvp.Key] = NormalizeEngineeringUnitsForAltium(kvp.Value);
         }
 
         return dict;
+    }
+
+    /// <summary>
+    /// Converts multi-byte Unicode engineering symbols (Ω, ℃, μ) and any mojibake sequences
+    /// (Î©, Â±, Âµ, â„ƒ) or HTML entities (&#937;, &#8451;) into clean 8-bit ANSI/Windows-1252
+    /// compatible engineering notation for Altium Designer DelphiScript (Bridge.pas) and SchLib files.
+    /// </summary>
+    public static string NormalizeEngineeringUnitsForAltium(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return string.Empty;
+
+        string s = System.Net.WebUtility.HtmlDecode(input);
+
+        // Fix common UTF-8-as-ANSI mojibake first
+        s = s.Replace("Î©", "Ohm", StringComparison.Ordinal)
+             .Replace("â„¦", "Ohm", StringComparison.Ordinal)
+             .Replace("â„ƒ", "degC", StringComparison.Ordinal)
+             .Replace("â„‰", "degF", StringComparison.Ordinal)
+             .Replace("Â±", "+/-", StringComparison.Ordinal)
+             .Replace("Âµ", "u", StringComparison.Ordinal)
+             .Replace("Î¼", "u", StringComparison.Ordinal)
+             .Replace("Â°C", "degC", StringComparison.Ordinal)
+             .Replace("Â°", "deg", StringComparison.Ordinal);
+
+        // Replace multi-byte Unicode symbols that are outside Windows-1252 or corrupt in DelphiScript ANSI INI reader
+        s = s.Replace("\u03A9", "Ohm", StringComparison.Ordinal) // Greek Capital Letter Omega (Ω)
+             .Replace("\u2126", "Ohm", StringComparison.Ordinal) // Ohm Sign (Ω)
+             .Replace("\u03C9", "Ohm", StringComparison.Ordinal) // Greek Small Letter Omega (ω)
+             .Replace("\u2103", "degC", StringComparison.Ordinal) // Degree Celsius (℃)
+             .Replace("\u2109", "degF", StringComparison.Ordinal) // Degree Fahrenheit (℉)
+             .Replace("\u00B1", "+/-", StringComparison.Ordinal) // Plus-Minus Sign (±)
+             .Replace("\u00B5", "u", StringComparison.Ordinal)   // Micro Sign (µ)
+             .Replace("\u03BC", "u", StringComparison.Ordinal)   // Greek Small Letter Mu (μ)
+             .Replace("°C", "degC", StringComparison.Ordinal);
+
+        return s.Trim();
     }
 }

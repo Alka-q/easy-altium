@@ -54,16 +54,78 @@ public sealed class LcscApiClient
             Comment = normalizedId
         };
 
-        // 1. EasyEDA Component API sorgusu (Sembol, Footprint, 3D UUID, JLCPCB Basic/Extended, c_para)
-        await TryEnrichFromEasyEdaApiAsync(metadata, cancellationToken).ConfigureAwait(false);
+        // 1. EasyEDA Component API ve 2. LCSC WMSSC Product Detail API sorgularını paralel çalıştır
+        var easyEdaMetadata = new LcscPartMetadata { LcscId = normalizedId };
+        var lcscMetadata = new LcscPartMetadata { LcscId = normalizedId };
 
-        // 2. LCSC WMSSC Product Detail API sorgusu (Gerçek zamanlı Stok, Birim Fiyat, Kategori, Datasheet)
-        await TryEnrichFromLcscProductApiAsync(metadata, cancellationToken).ConfigureAwait(false);
+        await Task.WhenAll(
+            TryEnrichFromEasyEdaApiAsync(easyEdaMetadata, cancellationToken),
+            TryEnrichFromLcscProductApiAsync(lcscMetadata, cancellationToken)
+        ).ConfigureAwait(false);
+
+        MergeParallelMetadata(metadata, easyEdaMetadata, lcscMetadata);
 
         // 3. Eksik alanlar için akıllı varsayılan tamamlama ve kategori sınıflandırması
         FinalizeMetadataDefaults(metadata);
 
         return metadata;
+    }
+
+    private static void MergeParallelMetadata(
+        LcscPartMetadata target,
+        LcscPartMetadata easyEda,
+        LcscPartMetadata lcsc)
+    {
+        // Önce EasyEDA alanlarını uygula
+        if (easyEda.PartCount > 1)
+            target.PartCount = easyEda.PartCount;
+        if (!string.IsNullOrWhiteSpace(easyEda.Mpn))
+            target.Mpn = easyEda.Mpn;
+        if (!string.IsNullOrWhiteSpace(easyEda.LibRef))
+            target.LibRef = easyEda.LibRef;
+        if (!string.IsNullOrWhiteSpace(easyEda.Description))
+            target.Description = easyEda.Description;
+        if (!string.IsNullOrWhiteSpace(easyEda.Package))
+            target.Package = easyEda.Package;
+        if (!string.IsNullOrWhiteSpace(easyEda.FootprintRef))
+            target.FootprintRef = easyEda.FootprintRef;
+        if (easyEda.DesignatorPrefix != "U?")
+            target.DesignatorPrefix = easyEda.DesignatorPrefix;
+        if (!string.IsNullOrWhiteSpace(easyEda.Manufacturer))
+            target.Manufacturer = easyEda.Manufacturer;
+        if (!string.IsNullOrWhiteSpace(easyEda.DatasheetUrl))
+            target.DatasheetUrl = easyEda.DatasheetUrl;
+        if (!string.IsNullOrWhiteSpace(easyEda.Value))
+            target.Value = easyEda.Value;
+        target.JlcpcbClass = easyEda.JlcpcbClass;
+        target.StepModelUuid = easyEda.StepModelUuid;
+        target.Model3DRotX = easyEda.Model3DRotX;
+        target.Model3DRotY = easyEda.Model3DRotY;
+        target.Model3DRotZ = easyEda.Model3DRotZ;
+
+        foreach (var kvp in easyEda.ExtraParameters)
+            target.ExtraParameters[kvp.Key] = kvp.Value;
+
+        // Ardından LCSC WMSSC alanlarıyla zenginleştir (LCSC daha güncel MPN, Üretici, Stok, Fiyat, Kategori sağlar)
+        if (!string.IsNullOrWhiteSpace(lcsc.Mpn))
+            target.Mpn = lcsc.Mpn;
+        if (!string.IsNullOrWhiteSpace(lcsc.Manufacturer))
+            target.Manufacturer = lcsc.Manufacturer;
+        if (!string.IsNullOrWhiteSpace(lcsc.Package))
+            target.Package = lcsc.Package;
+        if (!string.IsNullOrWhiteSpace(lcsc.Description))
+            target.Description = lcsc.Description;
+        if (!string.IsNullOrWhiteSpace(lcsc.DatasheetUrl))
+            target.DatasheetUrl = lcsc.DatasheetUrl;
+        if (lcsc.Stock > 0)
+            target.Stock = lcsc.Stock;
+        if (lcsc.UnitPriceUsd > 0)
+            target.UnitPriceUsd = lcsc.UnitPriceUsd;
+        if (!string.IsNullOrWhiteSpace(lcsc.RawCategoryName))
+            target.RawCategoryName = lcsc.RawCategoryName;
+
+        foreach (var kvp in lcsc.ExtraParameters)
+            target.ExtraParameters[kvp.Key] = kvp.Value;
     }
 
     private async Task TryEnrichFromEasyEdaApiAsync(
@@ -309,7 +371,9 @@ public sealed class LcscApiClient
                         metadata.FootprintRef = SanitizeAltiumIdentifier(val);
                     break;
                 case "pre":
-                    metadata.DesignatorPrefix = val.EndsWith('?') ? val : val + "?";
+                    string cleanedPre = val.Trim().TrimEnd('?');
+                    if (!string.IsNullOrWhiteSpace(cleanedPre))
+                        metadata.DesignatorPrefix = cleanedPre.ToUpperInvariant() + "?";
                     break;
                 case "manufacturer":
                 case "bom_manufacturer":
@@ -323,7 +387,8 @@ public sealed class LcscApiClient
                     metadata.DatasheetUrl = val;
                     break;
                 case "value":
-                    metadata.Value = val;
+                    if (val != "-")
+                        metadata.Value = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(val);
                     break;
                 case "jlcpcb part class":
                 case "componentlibrarytype":
@@ -333,11 +398,11 @@ public sealed class LcscApiClient
                         : "Extended";
                     break;
                 case "tolerance":
-                    metadata.ExtraParameters["Tolerance"] = val;
+                    metadata.ExtraParameters["Tolerance"] = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(val);
                     break;
                 case "voltage rating":
                 case "rated voltage":
-                    metadata.ExtraParameters["Voltage_Rating"] = val;
+                    metadata.ExtraParameters["Voltage_Rating"] = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(val);
                     break;
             }
         }
@@ -454,15 +519,8 @@ public sealed class LcscApiClient
                         continue;
 
                     string cleanKey = SanitizeParameterKey(pName);
-                    metadata.ExtraParameters[cleanKey] = pVal;
-
-                    if (pName.Contains("Resistance", StringComparison.OrdinalIgnoreCase) ||
-                        pName.Contains("Capacitance", StringComparison.OrdinalIgnoreCase) ||
-                        pName.Contains("Inductance", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (string.IsNullOrWhiteSpace(metadata.Value))
-                            metadata.Value = pVal;
-                    }
+                    string normalizedVal = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(pVal);
+                    metadata.ExtraParameters[cleanKey] = normalizedVal;
                 }
             }
         }
@@ -487,19 +545,27 @@ public sealed class LcscApiClient
                 : $"{metadata.LcscId}_FP";
         }
 
+        metadata.Description = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(metadata.Description);
         metadata.Category = ClassifyCategory(metadata);
+        metadata.DesignatorPrefix = ResolveCanonicalDesignatorPrefix(metadata);
 
-        if (metadata.DesignatorPrefix == "U?")
+        // Yalnızca gerçek pasif bileşenlerin (Direnç, Kapasitör, İndüktör/Ferrit Bead) Value değeri atanmalı;
+        // MOSFET/Diyot/IC gibi yarıiletkenlerde Output_Capacitance_Coss (80pF) veya RDS_on (47mOhm) Value/Comment olmamalı.
+        if (metadata.Category is ComponentCategory.Resistors or ComponentCategory.Capacitors or ComponentCategory.Inductors)
         {
-            metadata.DesignatorPrefix = metadata.Category switch
+            if (string.IsNullOrWhiteSpace(metadata.Value) || metadata.Value == "-")
             {
-                ComponentCategory.Resistors => "R?",
-                ComponentCategory.Capacitors => "C?",
-                ComponentCategory.Inductors => "L?",
-                ComponentCategory.Connectors => "J?",
-                ComponentCategory.Discrete => "Q?",
-                _ => "U?"
-            };
+                metadata.Value = ResolvePassivePrimaryValue(metadata);
+            }
+            else
+            {
+                metadata.Value = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(metadata.Value);
+            }
+        }
+        else
+        {
+            // Aktif/Yarıiletken, Konnektör veya Koruma (Sigorta/Varistör) bileşenlerinde yanlışlıkla yakalanmış parazitik kapasitans/direnç değerini temizle
+            metadata.Value = string.Empty;
         }
 
         if (metadata.Category == ComponentCategory.Capacitors)
@@ -512,48 +578,153 @@ public sealed class LcscApiClient
                 combined.Contains("Polymer", StringComparison.OrdinalIgnoreCase);
         }
 
-        metadata.Comment = !string.IsNullOrWhiteSpace(metadata.Value)
-            ? metadata.Value
-            : metadata.Mpn;
+        // Pasiflerde (Direnç, Kapasitör, İndüktör) şematik Comment alanında Value (örn. 100kOhm, 100nF, 4.7uH) gösterilir;
+        // diğer tüm bileşenlerde (IC, MOSFET, Diyot, Konnektör, Sigorta vb.) MPN (örn. AO3401A, RP2040) gösterilir.
+        if (metadata.Category is ComponentCategory.Resistors or ComponentCategory.Capacitors or ComponentCategory.Inductors &&
+            !string.IsNullOrWhiteSpace(metadata.Value))
+        {
+            metadata.Comment = metadata.Value;
+        }
+        else
+        {
+            metadata.Comment = metadata.Mpn;
+        }
 
         if (string.IsNullOrWhiteSpace(metadata.DatasheetUrl))
             metadata.DatasheetUrl = $"https://www.lcsc.com/search?q={metadata.LcscId}";
     }
 
+    private static string ResolvePassivePrimaryValue(LcscPartMetadata metadata)
+    {
+        if (metadata.Category == ComponentCategory.Resistors)
+        {
+            foreach (string key in new[] { "Resistance", "Resistance_Ohms" })
+            {
+                if (metadata.ExtraParameters.TryGetValue(key, out string? v) && !string.IsNullOrWhiteSpace(v) && v != "-")
+                    return LcscPartMetadata.NormalizeEngineeringUnitsForAltium(v);
+            }
+        }
+        else if (metadata.Category == ComponentCategory.Capacitors)
+        {
+            foreach (string key in new[] { "Capacitance" })
+            {
+                if (metadata.ExtraParameters.TryGetValue(key, out string? v) && !string.IsNullOrWhiteSpace(v) && v != "-")
+                    return LcscPartMetadata.NormalizeEngineeringUnitsForAltium(v);
+            }
+        }
+        else if (metadata.Category == ComponentCategory.Inductors)
+        {
+            foreach (string key in new[] { "Inductance", "Impedance_100MHz", "Impedance_at_Frequency", "Impedance" })
+            {
+                if (metadata.ExtraParameters.TryGetValue(key, out string? v) && !string.IsNullOrWhiteSpace(v) && v != "-")
+                    return LcscPartMetadata.NormalizeEngineeringUnitsForAltium(v);
+            }
+        }
+
+        return string.Empty;
+    }
+
+    public static string ResolveCanonicalDesignatorPrefix(LcscPartMetadata metadata)
+    {
+        string haystack = $"{metadata.RawCategoryName} {metadata.Description}".ToUpperInvariant();
+        string rawPre = (metadata.DesignatorPrefix ?? string.Empty).Trim().ToUpperInvariant().TrimEnd('?');
+
+        // 1. Özel alt kategorileri önce kontrol et (Sigorta, Varistör, Kristal, Diyot, Transistör, Ferrit Bead, Bobin, Konnektör)
+        if (haystack.Contains("FUSE") || haystack.Contains("PTC RESETTABLE") || rawPre == "F")
+            return "F?";
+
+        if (haystack.Contains("VARISTOR") || haystack.Contains("MOVS") || rawPre == "RV")
+            return "RV?";
+
+        if (haystack.Contains("CRYSTAL") || haystack.Contains("OSCILLATOR") || haystack.Contains("RESONATOR") || rawPre is "Y" or "X" or "XTAL")
+            return "Y?";
+
+        if (haystack.Contains("COMMON MODE CHOKE") || haystack.Contains("FERRITE BEAD") || haystack.Contains("INDUCTOR") || haystack.Contains("COIL"))
+            return rawPre == "FB" ? "FB?" : "L?";
+
+        if (haystack.Contains("CONNECTOR") || haystack.Contains("HEADER") || haystack.Contains("TERMINAL") || haystack.Contains("SOCKET") || haystack.Contains("USB JACK") || rawPre is "CN" or "J" or "CON" or "P")
+            return "J?";
+
+        if (haystack.Contains("MOSFET") || haystack.Contains("TRANSISTOR") || haystack.Contains("BJT") || haystack.Contains("SINGLE FETS") || haystack.Contains("IGBT"))
+            return "Q?";
+
+        if (haystack.Contains("DIODE") || haystack.Contains("RECTIFIER") || haystack.Contains("ZENER") || haystack.Contains("SCHOTTKY") || haystack.Contains("TVS") || haystack.Contains("LED"))
+            return "D?";
+
+        // Mekanik anahtarlar (Tactile Switch, Pushbutton, Slide/DIP/Toggle Switch) — "SWITCHING REGULATOR" veya "ANALOG SWITCH IC" ile karışmamalı!
+        if ((haystack.Contains("TACTILE") || haystack.Contains("PUSHBUTTON") || haystack.Contains("SLIDE SWITCH") ||
+             haystack.Contains("DIP SWITCH") || haystack.Contains("TOGGLE SWITCH") || haystack.Contains("MICRO SWITCH") ||
+             haystack.Contains("KEY SWITCH") || rawPre is "SW" or "S") &&
+            !haystack.Contains("REGULATOR") && !haystack.Contains("CONVERTER") && !haystack.Contains("CONTROLLER"))
+            return "SW?";
+
+        if (haystack.Contains("RELAY") || rawPre == "K")
+            return "K?";
+
+        // 2. Ana kategori tablosuna göre standart önek ata
+        return metadata.Category switch
+        {
+            ComponentCategory.Resistors => "R?",
+            ComponentCategory.Capacitors => "C?",
+            ComponentCategory.Inductors => "L?",
+            ComponentCategory.Connectors => "J?",
+            ComponentCategory.Discrete => rawPre == "D" ? "D?" : "Q?",
+            ComponentCategory.ICs => "U?",
+            _ => !string.IsNullOrWhiteSpace(rawPre) ? $"{rawPre}?" : "U?"
+        };
+    }
+
     public static ComponentCategory ClassifyCategory(LcscPartMetadata metadata)
     {
-        string haystack = $"{metadata.RawCategoryName} {metadata.Description} {metadata.DesignatorPrefix}".ToUpperInvariant();
+        string catAndDesc = $"{metadata.RawCategoryName} {metadata.Description}".ToUpperInvariant();
+        string rawPre = (metadata.DesignatorPrefix ?? string.Empty).Trim().ToUpperInvariant().TrimEnd('?');
 
-        if (metadata.DesignatorPrefix.StartsWith("R", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("RESISTOR"))
-            return ComponentCategory.Resistors;
-
-        if (metadata.DesignatorPrefix.StartsWith("C", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("CAPACITOR") || haystack.Contains("MLCC"))
-            return ComponentCategory.Capacitors;
-
-        if (metadata.DesignatorPrefix.StartsWith("L", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("INDUCTOR") || haystack.Contains("FERRITE BEAD") || haystack.Contains("COIL"))
-            return ComponentCategory.Inductors;
-
-        if (metadata.DesignatorPrefix.StartsWith("J", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("CONNECTOR") || haystack.Contains("HEADER") ||
-            haystack.Contains("TERMINAL") || haystack.Contains("SOCKET") || haystack.Contains("USB"))
+        // 1. Önce açık kategori/açıklama anahtar kelimelerine bak (DesignatorPrefix="C?" veya "CN?" yüzünden yanlış sınıflandırmayı önler!)
+        if (catAndDesc.Contains("CONNECTOR") || catAndDesc.Contains("HEADER") ||
+            catAndDesc.Contains("TERMINAL") || catAndDesc.Contains("SOCKET") ||
+            catAndDesc.Contains("USB") || rawPre is "J" or "CN" or "CON")
             return ComponentCategory.Connectors;
 
-        if (metadata.DesignatorPrefix.StartsWith("D", StringComparison.OrdinalIgnoreCase) ||
-            metadata.DesignatorPrefix.StartsWith("Q", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("DIODE") || haystack.Contains("MOSFET") ||
-            haystack.Contains("TRANSISTOR") || haystack.Contains("BJT") || haystack.Contains("LED"))
+        if (catAndDesc.Contains("FUSE") || catAndDesc.Contains("VARISTOR") ||
+            catAndDesc.Contains("MOVS") || catAndDesc.Contains("CIRCUIT PROTECTION") && !catAndDesc.Contains("TVS") && !catAndDesc.Contains("DIODE"))
+            return ComponentCategory.Misc;
+
+        if (catAndDesc.Contains("COMMON MODE CHOKE") || catAndDesc.Contains("INDUCTOR") ||
+            catAndDesc.Contains("FERRITE BEAD") || catAndDesc.Contains("COIL"))
+            return ComponentCategory.Inductors;
+
+        if (catAndDesc.Contains("CAPACITOR") || catAndDesc.Contains("MLCC"))
+            return ComponentCategory.Capacitors;
+
+        if (catAndDesc.Contains("RESISTOR") && !catAndDesc.Contains("VARISTOR"))
+            return ComponentCategory.Resistors;
+
+        if (catAndDesc.Contains("DIODE") || catAndDesc.Contains("RECTIFIER") ||
+            catAndDesc.Contains("MOSFET") || catAndDesc.Contains("TRANSISTOR") ||
+            catAndDesc.Contains("BJT") || catAndDesc.Contains("SINGLE FETS") ||
+            catAndDesc.Contains("THYRISTOR") || catAndDesc.Contains("IGBT") ||
+            catAndDesc.Contains("LED"))
             return ComponentCategory.Discrete;
 
-        if (metadata.DesignatorPrefix.StartsWith("U", StringComparison.OrdinalIgnoreCase) ||
-            haystack.Contains("MICROCONTROLLER") || haystack.Contains("MCU") ||
-            haystack.Contains("AMPLIFIER") || haystack.Contains("REGULATOR") ||
-            haystack.Contains("INTERFACE") || haystack.Contains("CONVERTER") || haystack.Contains("IC"))
+        if (catAndDesc.Contains("MICROCONTROLLER") || catAndDesc.Contains("MCU") ||
+            catAndDesc.Contains("PROCESSOR") || catAndDesc.Contains("AMPLIFIER") ||
+            catAndDesc.Contains("REGULATOR") || catAndDesc.Contains("INTERFACE") ||
+            catAndDesc.Contains("CONVERTER") || catAndDesc.Contains("TRANSCEIVER") ||
+            catAndDesc.Contains("DRIVER") || catAndDesc.Contains("MEMORY") ||
+            catAndDesc.Contains("SENSOR") || catAndDesc.Contains("OPAMP"))
             return ComponentCategory.ICs;
 
-        return ComponentCategory.Misc;
+        // 2. Yalnızca kategori metninden çıkarılamadıysa tam DesignatorPrefix eşleşmesine bak ("CN" != "C")
+        return rawPre switch
+        {
+            "R" => ComponentCategory.Resistors,
+            "C" => ComponentCategory.Capacitors,
+            "L" or "FB" => ComponentCategory.Inductors,
+            "J" or "CN" or "CON" => ComponentCategory.Connectors,
+            "D" or "Q" => ComponentCategory.Discrete,
+            "U" or "IC" => ComponentCategory.ICs,
+            _ => ComponentCategory.Misc
+        };
     }
 
     public static string SanitizeAltiumIdentifier(string raw)

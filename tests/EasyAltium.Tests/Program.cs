@@ -150,5 +150,80 @@ finally
         File.Delete(tempPcbLib);
 }
 
+// 6. Engineering Unit Normalization (Ohm, +/-, u, degC) & Mojibake Prevention Tests
+AssertTrue(
+    LcscPartMetadata.NormalizeEngineeringUnitsForAltium("100kΩ ±1% -55℃~+155℃") == "100kOhm +/-1% -55degC~+155degC" &&
+    LcscPartMetadata.NormalizeEngineeringUnitsForAltium("100kÎ© Â±1% 4.7ÂµF") == "100kOhm +/-1% 4.7uF" &&
+    LcscPartMetadata.NormalizeEngineeringUnitsForAltium("100k&#937; &#8451;") == "100kOhm degC",
+    "NormalizeEngineeringUnitsForAltium converts Ω/℃/±/µ and mojibake/HTML entities to clean ANSI");
+
+// 7. Category Classification, DesignatorPrefix & Comment/Value Disambiguation Tests
+var mosfetMeta = new LcscPartMetadata
+{
+    LcscId = "C15127",
+    Mpn = "AO3401A",
+    RawCategoryName = "Transistors/Thyristors / Single FETs, MOSFETs",
+    Description = "30V 4A Surface Mount SOT-23",
+    DesignatorPrefix = "Q?"
+};
+mosfetMeta.ExtraParameters["Output_Capacitance_Coss"] = "80pF";
+mosfetMeta.ExtraParameters["RDS_on"] = "47mOhm@10V";
+AssertTrue(
+    LcscApiClient.ClassifyCategory(mosfetMeta) == ComponentCategory.Discrete &&
+    LcscApiClient.ResolveCanonicalDesignatorPrefix(mosfetMeta) == "Q?",
+    "MOSFET (AO3401A) classified as Discrete with Q? designator");
+
+var connMeta = new LcscPartMetadata
+{
+    LcscId = "C157991",
+    Mpn = "B5B-XH-A(LF)(SN)",
+    RawCategoryName = "Connectors / Headers, Male Pins",
+    Description = "Connector Header 5 position 2.5mm Pitch",
+    DesignatorPrefix = "CN?"
+};
+AssertTrue(
+    LcscApiClient.ClassifyCategory(connMeta) == ComponentCategory.Connectors &&
+    LcscApiClient.ResolveCanonicalDesignatorPrefix(connMeta) == "J?",
+    "Connector with CN? prefix classified as Connectors (not Capacitors) with J? designator");
+
+var chokeMeta = new LcscPartMetadata
+{
+    LcscId = "C2932174",
+    Mpn = "PSCIAQ4532-101Z",
+    RawCategoryName = "Filters / Common Mode Chokes",
+    Description = "100uH@100kHz 2Line Common Mode Choke",
+    DesignatorPrefix = "U?"
+};
+AssertTrue(
+    LcscApiClient.ClassifyCategory(chokeMeta) == ComponentCategory.Inductors &&
+    LcscApiClient.ResolveCanonicalDesignatorPrefix(chokeMeta) == "L?",
+    "Common Mode Choke with U? prefix classified as Inductors with L? designator");
+
+var fuseMeta = new LcscPartMetadata
+{
+    LcscId = "C70068",
+    Mpn = "nSMD025",
+    RawCategoryName = "Circuit Protection / PTC Resettable Fuses",
+    Description = "Polymeric PTC Resettable Fuse 16V 250mA",
+    DesignatorPrefix = "F?"
+};
+AssertTrue(
+    LcscApiClient.ClassifyCategory(fuseMeta) == ComponentCategory.Misc &&
+    LcscApiClient.ResolveCanonicalDesignatorPrefix(fuseMeta) == "F?",
+    "PTC Resettable Fuse classified as Misc (not ICs) with F? designator");
+
+var buckIcMeta = new LcscPartMetadata
+{
+    LcscId = "C311983",
+    Mpn = "TPS54302DDCR",
+    RawCategoryName = "Power Management (PMIC) / Voltage Regulators - DC DC Switching Regulators",
+    Description = "Buck Switching Regulator IC Adjustable 1 Output 3A TSOT-23-6",
+    DesignatorPrefix = "U?"
+};
+AssertTrue(
+    LcscApiClient.ClassifyCategory(buckIcMeta) == ComponentCategory.ICs &&
+    LcscApiClient.ResolveCanonicalDesignatorPrefix(buckIcMeta) == "U?",
+    "Buck Switching Regulator IC (TPS54302DDCR) preserves U? designator (not SW?)");
+
 Console.WriteLine($"=== Results: {passed} Passed, {failed} Failed ===");
 return failed == 0 ? 0 : 1;

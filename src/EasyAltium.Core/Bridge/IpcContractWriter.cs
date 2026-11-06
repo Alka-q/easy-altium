@@ -178,7 +178,8 @@ public sealed class IpcContractWriter
         if (string.IsNullOrEmpty(value))
             return string.Empty;
 
-        return value
+        string normalized = LcscPartMetadata.NormalizeEngineeringUnitsForAltium(value);
+        return normalized
             .Replace("\r", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
             .Trim();

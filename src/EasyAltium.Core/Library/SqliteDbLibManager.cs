@@ -151,7 +151,7 @@ public sealed class SqliteDbLibManager
         cmd.Parameters.AddWithValue("$lcscPart", part.LcscId);
         cmd.Parameters.AddWithValue("$mpn", part.Mpn);
         cmd.Parameters.AddWithValue("$manufacturer", part.Manufacturer);
-        cmd.Parameters.AddWithValue("$description", part.Description);
+        cmd.Parameters.AddWithValue("$description", LcscPartMetadata.NormalizeEngineeringUnitsForAltium(part.Description));
         cmd.Parameters.AddWithValue("$package", part.Package);
         cmd.Parameters.AddWithValue("$jlcpcbClass", part.JlcpcbClass);
         cmd.Parameters.AddWithValue("$datasheetUrl", part.DatasheetUrl);
@@ -159,7 +159,7 @@ public sealed class SqliteDbLibManager
         cmd.Parameters.AddWithValue("$libraryPath", libraryPath);
         cmd.Parameters.AddWithValue("$footprintRef", footprintRef);
         cmd.Parameters.AddWithValue("$footprintPath", footprintPath);
-        cmd.Parameters.AddWithValue("$value", part.Value);
+        cmd.Parameters.AddWithValue("$value", LcscPartMetadata.NormalizeEngineeringUnitsForAltium(part.Value));
         cmd.Parameters.AddWithValue("$stock", part.Stock);
         cmd.Parameters.AddWithValue("$unitPriceUsd", part.UnitPriceUsd.ToString("0.0000", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$stepModelPath", stepModelPath ?? string.Empty);

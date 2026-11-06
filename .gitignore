@@ -58,6 +58,7 @@ tools/npnp/*.zip
 
 # Internal / Scratch Files
 gemini-code-*.md
+graphify-out/
 
 # OS & Editor Files
 .DS_Store

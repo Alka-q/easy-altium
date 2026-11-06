@@ -217,8 +217,14 @@ end;
 
 {------------------------------------------------------------------------------}
 { Helper: Installs or refreshes a single library (.SchLib/.PcbLib/.DbLib)      }
+{         When ForceReinstall is False and the library is already installed,   }
+{         skips the expensive Uninstall+Install cycle for instant placement.   }
 {------------------------------------------------------------------------------}
-procedure InstallOrRefreshSingleLibrary(const LibPath : String; const LogFilePath : String);
+procedure InstallOrRefreshSingleLibrary(
+    const LibPath        : String;
+    const LogFilePath    : String;
+    const ForceReinstall : Boolean
+);
 var
     IntLibMan : IIntegratedLibraryManager;
     OpenDoc   : IServerDocument;
@@ -240,13 +246,15 @@ begin
     try
         if IsLibraryAlreadyInstalled(LibPath) then
         begin
-            { Re-install to refresh Altium's internal library cache if updated on disk }
-            try
-                IntLibMan.UninstallLibrary(LibPath);
-            except
+            if ForceReinstall then
+            begin
+                try
+                    IntLibMan.UninstallLibrary(LibPath);
+                except
+                end;
+                IntLibMan.InstallLibrary(LibPath);
+                WriteBridgeLog(LogFilePath, 'INFO', 'Installed library refreshed: ' + LibPath);
             end;
-            IntLibMan.InstallLibrary(LibPath);
-            WriteBridgeLog(LogFilePath, 'INFO', 'Installed library refreshed: ' + LibPath);
         end
         else
         begin
@@ -280,6 +288,7 @@ var
     DbLibPath                : String;
     UsePassiveTemplateSymbol : Integer;
     PassiveTemplateSchLib    : String;
+    IsMasterMode             : Boolean;
 begin
     LibraryMode              := Ini.ReadString('Transaction', 'LibraryMode', 'MasterLib');
     SchLibPath               := Ini.ReadString('LibraryPaths', 'SchLibPath', '');
@@ -288,14 +297,17 @@ begin
     UsePassiveTemplateSymbol := Ini.ReadInteger('LibraryPaths', 'UsePassiveTemplateSymbol', 0);
     PassiveTemplateSchLib    := Ini.ReadString('LibraryPaths', 'PassiveTemplateSchLibPath', '');
 
-    InstallOrRefreshSingleLibrary(PcbLibPath, LogFilePath);
-    InstallOrRefreshSingleLibrary(SchLibPath, LogFilePath);
+    { Only force Uninstall+Install when overwriting shared LCSC_Master files in Mode A }
+    IsMasterMode := UpperCase(Trim(LibraryMode)) = 'MASTERLIB';
+
+    InstallOrRefreshSingleLibrary(PcbLibPath, LogFilePath, IsMasterMode);
+    InstallOrRefreshSingleLibrary(SchLibPath, LogFilePath, IsMasterMode);
 
     if UsePassiveTemplateSymbol = 1 then
-        InstallOrRefreshSingleLibrary(PassiveTemplateSchLib, LogFilePath);
+        InstallOrRefreshSingleLibrary(PassiveTemplateSchLib, LogFilePath, False);
 
     if UpperCase(Trim(LibraryMode)) = 'SQLITEDBLIB' then
-        InstallOrRefreshSingleLibrary(DbLibPath, LogFilePath);
+        InstallOrRefreshSingleLibrary(DbLibPath, LogFilePath, False);
 end;
 
 {------------------------------------------------------------------------------}
@@ -372,8 +384,12 @@ var
     ParamIterator : ISch_Iterator;
     Param         : ISch_Parameter;
     Found         : Boolean;
+    NormRequest   : String;
+    NormExisting  : String;
 begin
     if (Comp = nil) or (Trim(ParamName) = '') then Exit;
+
+    NormRequest := UpperCase(Trim(StringReplace(ParamName, ' ', '_', MkSet(rfReplaceAll))));
 
     Found := False;
     ParamIterator := Comp.SchIterator_Create;
@@ -382,11 +398,12 @@ begin
         Param := ParamIterator.FirstSchObject;
         while Param <> nil do
         begin
-            if UpperCase(Trim(Param.Name)) = UpperCase(Trim(ParamName)) then
+            NormExisting := UpperCase(Trim(StringReplace(Param.Name, ' ', '_', MkSet(rfReplaceAll))));
+            if (UpperCase(Trim(Param.Name)) = UpperCase(Trim(ParamName))) or
+               (NormExisting = NormRequest) then
             begin
                 Param.Text := ParamVal;
                 Found := True;
-                Break;
             end;
             Param := ParamIterator.NextSchObject;
         end;
@@ -410,6 +427,7 @@ end;
 
 {------------------------------------------------------------------------------}
 { Helper: Applies all BOM parameters from INI [Parameters] section             }
+{         and removes any stale Value parameter on non-passive components.     }
 {------------------------------------------------------------------------------}
 procedure ApplyComponentParameters(
     Comp              : ISch_Component;
@@ -417,13 +435,17 @@ procedure ApplyComponentParameters(
     const LogFilePath : String
 );
 var
-    ParamKeys  : TStringList;
-    Idx        : Integer;
-    KeyName    : String;
-    KeyVal     : String;
+    ParamKeys     : TStringList;
+    Idx           : Integer;
+    KeyName       : String;
+    KeyVal        : String;
+    HasValueKey   : Boolean;
+    ParamIterator : ISch_Iterator;
+    Param         : ISch_Parameter;
 begin
     if (Comp = nil) or (Ini = nil) then Exit;
 
+    HasValueKey := False;
     ParamKeys := TStringList.Create;
     try
         Ini.ReadSection('Parameters', ParamKeys);
@@ -432,10 +454,33 @@ begin
             KeyName := Trim(ParamKeys.Strings[Idx]);
             if KeyName <> '' then
             begin
+                if UpperCase(KeyName) = 'VALUE' then
+                    HasValueKey := True;
                 KeyVal := Ini.ReadString('Parameters', KeyName, '');
                 UpsertComponentParameter(Comp, KeyName, KeyVal);
             end;
         end;
+
+        if not HasValueKey then
+        begin
+            ParamIterator := Comp.SchIterator_Create;
+            ParamIterator.AddFilter_ObjectSet(MkSet(eParameter));
+            try
+                Param := ParamIterator.FirstSchObject;
+                while Param <> nil do
+                begin
+                    if UpperCase(Trim(Param.Name)) = 'VALUE' then
+                    begin
+                        Param.Text := '';
+                        Param.IsHidden := True;
+                    end;
+                    Param := ParamIterator.NextSchObject;
+                end;
+            finally
+                Comp.SchIterator_Destroy(ParamIterator);
+            end;
+        end;
+
         WriteBridgeLog(LogFilePath, 'INFO', IntToStr(ParamKeys.Count) + ' BOM parameters applied to component.');
     finally
         ParamKeys.Free;
@@ -616,6 +661,10 @@ begin
     try
         ClearSchematicSelection(SchDoc);
 
+        { Move component AND all its child primitives (pins, rectangles, designator, comment)
+          from library origin (0,0) to target location using MoveToXY (not Comp.Location := ...) }
+        Comp.MoveToXY(MilsToCoord(TargetX_Mils), MilsToCoord(TargetY_Mils));
+
         { Configure Designator, Comment, and Description }
         if Comp.Designator <> nil then
         begin
@@ -633,7 +682,6 @@ begin
             Comp.ComponentDescription := DescriptionText;
 
         Comp.CurrentPartID := 1;
-        Comp.Location      := Point(MilsToCoord(TargetX_Mils), MilsToCoord(TargetY_Mils));
 
         { Attach Footprint and BOM Parameters }
         AttachOrUpdateFootprint(Comp, FootprintRef, PcbLibPath, LogFilePath);
@@ -656,15 +704,23 @@ begin
 
     SchDoc.GraphicallyInvalidate;
 
-    { 4. If InteractiveCursor mode is enabled, attach component to user cursor }
+    { 4. Write SUCCESS to current_part.ini BEFORE starting the interactive modal placement loop
+         so EasyAltium Host immediately receives SUCCESS without waiting for mouse click }
+    UpdateIniResult(Ini, 'SUCCESS', 'PlacedOnSchematic', SchDoc.DocumentName, '');
+
+    { 5. If InteractiveCursor mode is enabled, cut the selected component into Altium's
+         internal schematic clipboard and invoke Sch:Paste so the component floats directly
+         under the mouse cursor at its hotspot (0,0 offset) regardless of zoom/pan viewport! }
     if UpperCase(Trim(PlacementMethod)) = 'INTERACTIVECURSOR' then
     begin
         try
+            WriteBridgeLog(LogFilePath, 'INFO', 'Component attached to cursor (Sch:Cut + Sch:Paste).');
             ResetParameters;
-            RunProcess('Sch:MoveSelectedObjects');
-            WriteBridgeLog(LogFilePath, 'INFO', 'Component attached to cursor (Sch:MoveSelectedObjects).');
+            RunProcess('Sch:Cut');
+            ResetParameters;
+            RunProcess('Sch:Paste');
         except
-            WriteBridgeLog(LogFilePath, 'WARN', 'Sch:MoveSelectedObjects could not start; component placed on sheet.');
+            WriteBridgeLog(LogFilePath, 'WARN', 'Interactive cursor paste could not start; component placed on sheet.');
         end;
     end;
 

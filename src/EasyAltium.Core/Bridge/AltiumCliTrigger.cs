@@ -112,7 +112,7 @@ public sealed class AltiumCliTrigger
 
             while (sw.Elapsed < maxWait && !cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(350, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(120, cancellationToken).ConfigureAwait(false);
                 var (state, action, target, error) = await _contractWriter
                     .ReadResultSectionAsync(_config.IpcIniFilePath, cancellationToken)
                     .ConfigureAwait(false);
